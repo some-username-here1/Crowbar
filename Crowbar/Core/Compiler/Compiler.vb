@@ -636,7 +636,7 @@ Public Class Compiler
 			listOfCompiledExtensions = New List(Of String)(New String() {".mdl"})
 		Else
 			searchPattern = sourceFileNameWithoutExtension + ".*"
-			listOfCompiledExtensions = New List(Of String)(New String() {".ani", ".mdl", ".phy", ".vtx", ".vvd"})
+			listOfCompiledExtensions = New List(Of String)(New String() {".ani", ".mdl", ".phy", ".vtx", ".vvd", ".cvvd"})
 		End If
 		For Each sourcePathFileName As String In Directory.EnumerateFiles(sourcePath, searchPattern)
 			If Not listOfCompiledExtensions.Contains(Path.GetExtension(sourcePathFileName).ToLower()) Then
