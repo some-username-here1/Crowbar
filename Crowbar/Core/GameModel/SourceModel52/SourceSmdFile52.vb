@@ -211,7 +211,7 @@ Public Class SourceSmdFile52
 		Dim collisionData As SourcePhyCollisionData
 		Dim aBone As SourceMdlBone
 		Dim aTriangle As SourcePhyFace
-		Dim faceSection As SourcePhyFaceSection
+		Dim faceSection As SourcePhyConvexMesh
 		Dim phyVertex As SourcePhyVertex
 		Dim aVectorTransformed As SourceVector
 
@@ -222,8 +222,8 @@ Public Class SourceSmdFile52
 				For collisionDataIndex As Integer = 0 To Me.thePhyFileData.theSourcePhyCollisionDatas.Count - 1
 					collisionData = Me.thePhyFileData.theSourcePhyCollisionDatas(collisionDataIndex)
 
-					For faceSectionIndex As Integer = 0 To collisionData.theFaceSections.Count - 1
-						faceSection = collisionData.theFaceSections(faceSectionIndex)
+					For faceSectionIndex As Integer = 0 To collisionData.theConvexMeshes.Count - 1
+						faceSection = collisionData.theConvexMeshes(faceSectionIndex)
 
 						If faceSection.theBoneIndex >= Me.theMdlFileData.theBones.Count Then
 							Continue For
@@ -767,7 +767,7 @@ Public Class SourceSmdFile52
 	End Sub
 
 	Private Sub ProcessTransformsForPhysics()
-		If Me.thePhyFileData.theSourcePhyIsCollisionModel Then
+		If Me.thePhyFileData.theSourcePhyCollisionDatas.Count = 1 Then
 			Dim aFirstAnimationDescFrameLine As New AnimationFrameLine()
 			Me.CalculateFirstAnimDescFrameLinesForPhysics(aFirstAnimationDescFrameLine)
 
@@ -895,7 +895,7 @@ Public Class SourceSmdFile52
 		'	aVectorTransformed = MathModule.VectorITransform(aVector, aBone.poseToBoneColumn0, aBone.poseToBoneColumn1, aBone.poseToBoneColumn2, aBone.poseToBoneColumn3)
 		'End If
 		'------
-		If Me.thePhyFileData.theSourcePhyIsCollisionModel Then
+		If Me.thePhyFileData.theSourcePhyCollisionDatas.Count = 1 Then
 			'Dim copyOfVector As New SourceVector()
 			''copyOfVector.x = 1 / 0.0254 * vertex.x
 			''copyOfVector.y = 1 / 0.0254 * vertex.y
@@ -2169,7 +2169,7 @@ Public Class SourceSmdFile52
 				'NOTE: Needs to be offset from current animValues index to match the C++ code above in comment.
 				v1 = animValues(animValueIndex + animValues(animValueIndex).valid).value * scale
 			End If
-		Catch
+		Catch ex As Exception
 		End Try
 
 		Return v1

@@ -17,7 +17,7 @@ Public Class PackUserControl
 
 #Region "Init and Free"
 
-	Private Sub Init()
+	Protected Overrides Sub Init()
 		Me.InputComboBox.DisplayMember = "Value"
 		Me.InputComboBox.ValueMember = "Key"
 		Me.InputComboBox.DataSource = EnumHelper.ToList(GetType(PackInputOptions))
@@ -30,6 +30,8 @@ Public Class PackUserControl
 		Me.InitOutputPathComboBox()
 		Me.UpdateOutputPathWidgets()
 
+		'NOTE: Prevent changing this combobox's SelectedIndex when another combobox's (which also accesses "SelectedIndex" and TheApp.Settings) SelectedIndex changes.
+		Me.GameSetupComboBox.BindingContext = New BindingContext()
 		'NOTE: The DataSource, DisplayMember, and ValueMember need to be set before DataBindings, or else an exception is raised.
 		Me.GameSetupComboBox.DisplayMember = "GameName"
 		Me.GameSetupComboBox.ValueMember = "GameName"
@@ -78,6 +80,7 @@ Public Class PackUserControl
 	Private Sub InitPackerOptions()
 		Me.theSelectedPackerOptions = New List(Of String)()
 		Me.MultiFileVpkCheckBox.DataBindings.Add("Checked", TheApp.Settings, "PackOptionMultiFileVpkIsChecked", False, DataSourceUpdateMode.OnPropertyChanged)
+		Me.IgnoreWhitelistWarningsCheckBox.DataBindings.Add("Checked", TheApp.Settings, "PackOptionIgnoreWhitelistWarningsIsChecked", False, DataSourceUpdateMode.OnPropertyChanged)
 
 		Me.GmaTitleTextBox.DataBindings.Add("Text", TheApp.Settings, "PackGmaTitle", False, DataSourceUpdateMode.OnValidation)
 		'NOTE: There is no automatic data-binding with TagsWidget, so manually bind from object to widget here.
@@ -87,41 +90,42 @@ Public Class PackUserControl
 		AddHandler Me.GmaGarrysModTagsUserControl.TagsPropertyChanged, AddressOf Me.GmaGarrysModTagsUserControl_TagsPropertyChanged
 	End Sub
 
-	Private Sub Free()
-		RemoveHandler Me.InputPathFileNameTextBox.DataBindings("Text").Parse, AddressOf FileManager.ParsePath
-		RemoveHandler Me.OutputPathTextBox.DataBindings("Text").Parse, AddressOf FileManager.ParsePathFileName
-		RemoveHandler TheApp.Settings.PropertyChanged, AddressOf AppSettings_PropertyChanged
-		RemoveHandler TheApp.Packer.ProgressChanged, AddressOf Me.PackerBackgroundWorker_ProgressChanged
-		RemoveHandler TheApp.Packer.RunWorkerCompleted, AddressOf Me.PackerBackgroundWorker_RunWorkerCompleted
+	' Do not need Free() because this widget is destroyed only on program exit.
+	'Protected Overrides Sub Free()
+	'	RemoveHandler Me.InputPathFileNameTextBox.DataBindings("Text").Parse, AddressOf FileManager.ParsePath
+	'	RemoveHandler Me.OutputPathTextBox.DataBindings("Text").Parse, AddressOf FileManager.ParsePathFileName
+	'	RemoveHandler TheApp.Settings.PropertyChanged, AddressOf AppSettings_PropertyChanged
+	'	RemoveHandler TheApp.Packer.ProgressChanged, AddressOf Me.PackerBackgroundWorker_ProgressChanged
+	'	RemoveHandler TheApp.Packer.RunWorkerCompleted, AddressOf Me.PackerBackgroundWorker_RunWorkerCompleted
 
-		Me.InputPathFileNameTextBox.DataBindings.Clear()
+	'	Me.InputPathFileNameTextBox.DataBindings.Clear()
 
-		Me.OutputPathTextBox.DataBindings.Clear()
-		Me.OutputParentPathTextBox.DataBindings.Clear()
+	'	Me.OutputPathTextBox.DataBindings.Clear()
+	'	Me.OutputParentPathTextBox.DataBindings.Clear()
 
-		Me.GameSetupComboBox.DataSource = Nothing
-		Me.GameSetupComboBox.DataBindings.Clear()
+	'	Me.GameSetupComboBox.DataSource = Nothing
+	'	Me.GameSetupComboBox.DataBindings.Clear()
 
-		Me.FreeCrowbarOptions()
-		Me.FreePackerOptions()
+	'	Me.FreeCrowbarOptions()
+	'	Me.FreePackerOptions()
 
-		Me.InputComboBox.DataBindings.Clear()
+	'	Me.InputComboBox.DataBindings.Clear()
 
-		Me.PackedFilesComboBox.DataBindings.Clear()
-	End Sub
+	'	Me.PackedFilesComboBox.DataBindings.Clear()
+	'End Sub
 
-	Private Sub FreeCrowbarOptions()
-		Me.LogFileCheckBox.DataBindings.Clear()
-	End Sub
+	'Private Sub FreeCrowbarOptions()
+	'	Me.LogFileCheckBox.DataBindings.Clear()
+	'End Sub
 
-	Private Sub FreePackerOptions()
-		Me.MultiFileVpkCheckBox.DataBindings.Clear()
+	'Private Sub FreePackerOptions()
+	'	Me.MultiFileVpkCheckBox.DataBindings.Clear()
 
-		Me.GmaTitleTextBox.DataBindings.Clear()
-		If Me.GmaGarrysModTagsUserControl IsNot Nothing Then
-			RemoveHandler Me.GmaGarrysModTagsUserControl.TagsPropertyChanged, AddressOf Me.GmaGarrysModTagsUserControl_TagsPropertyChanged
-		End If
-	End Sub
+	'	Me.GmaTitleTextBox.DataBindings.Clear()
+	'	If Me.GmaGarrysModTagsUserControl IsNot Nothing Then
+	'		RemoveHandler Me.GmaGarrysModTagsUserControl.TagsPropertyChanged, AddressOf Me.GmaGarrysModTagsUserControl_TagsPropertyChanged
+	'	End If
+	'End Sub
 
 #End Region
 
@@ -131,15 +135,11 @@ Public Class PackUserControl
 
 #Region "Widget Event Handlers"
 
-	Private Sub PackUserControl_Load(sender As Object, e As EventArgs) Handles Me.Load
+	Private Sub PackUserControl_Resize(sender As Object, e As EventArgs) Handles Me.Resize
 		'NOTE: This code prevents Visual Studio or Windows often inexplicably extending the right side of these widgets.
 		Workarounds.WorkaroundForFrameworkAnchorRightSizingBug(Me.InputPathFileNameTextBox, Me.BrowseForInputFolderOrFileNameButton)
 		Workarounds.WorkaroundForFrameworkAnchorRightSizingBug(Me.OutputPathTextBox, Me.BrowseForOutputPathButton)
 		Workarounds.WorkaroundForFrameworkAnchorRightSizingBug(Me.OutputParentPathTextBox, Me.BrowseForOutputPathButton)
-
-		If Not Me.DesignMode Then
-			Me.Init()
-		End If
 	End Sub
 
 #End Region
@@ -248,14 +248,24 @@ Public Class PackUserControl
 
 	Private Sub AppSettings_PropertyChanged(ByVal sender As System.Object, ByVal e As System.ComponentModel.PropertyChangedEventArgs)
 		If e.PropertyName = "PackInputPath" Then
+			Me.DeleteWarningMessage()
 			Me.SetPackerOptionsText()
 			Me.UpdateOutputPathWidgets()
 		ElseIf e.PropertyName = "PackMode" Then
+			Me.DeleteWarningMessage()
+			Me.SetPackerOptionsText()
 			Me.UpdateOutputPathWidgets()
 		ElseIf e.PropertyName = "PackOutputFolderOption" Then
 			Me.UpdateOutputPathWidgets()
 		ElseIf e.PropertyName = "PackGameSetupSelectedIndex" Then
+			Me.DeleteWarningMessage()
 			Me.UpdatePackerOptions()
+		ElseIf e.PropertyName = "PackOptionMultiFileVpkIsChecked" Then
+			'Me.EditPackerOptionsText(Me.GetMultiFileArgumentText(), TheApp.Settings.PackOptionMultiFileVpkIsChecked)
+			Me.SetPackerOptionsText()
+		ElseIf e.PropertyName = "PackOptionIgnoreWhitelistWarningsIsChecked" Then
+			'Me.EditPackerOptionsText("warninvalid", TheApp.Settings.PackOptionIgnoreWhitelistWarningsIsChecked)
+			Me.SetPackerOptionsText()
 		ElseIf e.PropertyName.StartsWith("Pack") AndAlso e.PropertyName.EndsWith("IsChecked") Then
 			Me.UpdateWidgets(TheApp.Settings.PackerIsRunning)
 		End If
@@ -370,58 +380,84 @@ Public Class PackUserControl
 		End If
 	End Sub
 
+	Private Sub DeleteWarningMessage()
+		If Me.LogRichTextBox.Text.StartsWith(Me.theWarningMessgeAboutInvalidJsonFormat) Then
+			Me.LogRichTextBox.Text = ""
+		End If
+	End Sub
+
 	Private Sub UpdatePackerOptions()
 		'TODO: Add 'Write multi-file VPK' option.
 		Dim gameSetup As GameSetup
 		gameSetup = TheApp.Settings.GameSetups(TheApp.Settings.PackGameSetupSelectedIndex)
 		If Path.GetFileName(gameSetup.PackerPathFileName) = "gmad.exe" Then
 			Me.MultiFileVpkCheckBox.Visible = False
-			Me.EditPackerOptionsText("M", False)
+			'Me.EditPackerOptionsText(Me.GetMultiFileArgumentText(), False)
 
+			Me.IgnoreWhitelistWarningsCheckBox.Visible = True
+			'Me.EditPackerOptionsText("warninvalid", TheApp.Settings.PackOptionIgnoreWhitelistWarningsIsChecked)
 			Me.GmaPanel.Visible = True
 		Else
-			'Me.MultiFileVpkCheckBox.Visible = True
-			'Me.EditPackerOptionsText("M", TheApp.Settings.PackOptionMultiFileVpkIsChecked)
+			Me.MultiFileVpkCheckBox.Visible = True
+			'Me.EditPackerOptionsText(Me.GetMultiFileArgumentText(), TheApp.Settings.PackOptionMultiFileVpkIsChecked)
 
+			Me.IgnoreWhitelistWarningsCheckBox.Visible = False
+			'Me.EditPackerOptionsText("warninvalid", False)
 			Me.GmaPanel.Visible = False
 		End If
 
 		Me.SetPackerOptionsText()
 	End Sub
 
-	Private Sub EditPackerOptionsText(ByVal iCompilerOption As String, ByVal optionIsEnabled As Boolean)
-		Dim compilerOption As String
+	'Private Function GetMultiFileArgumentText() As String
+	'	Dim text As String
+	'	Dim inputPath As String = TheApp.Settings.PackInputPath
+	'	Dim inputFolder As String = Path.GetFileName(inputPath)
 
-		compilerOption = "-" + iCompilerOption
+	'	text = "M a "
+	'	text += inputFolder
+	'	text += " @list.txt"
 
-		If optionIsEnabled Then
-			If Not Me.theSelectedPackerOptions.Contains(compilerOption) Then
-				Me.theSelectedPackerOptions.Add(compilerOption)
-				Me.theSelectedPackerOptions.Sort()
-			End If
-		Else
-			If Me.theSelectedPackerOptions.Contains(compilerOption) Then
-				Me.theSelectedPackerOptions.Remove(compilerOption)
-			End If
-		End If
-	End Sub
+	'	Return text
+	'End Function
+
+	'Private Sub EditPackerOptionsText(ByVal iCompilerOption As String, ByVal optionIsEnabled As Boolean)
+	'	Dim compilerOption As String
+
+	'	compilerOption = "-" + iCompilerOption
+
+	'	If optionIsEnabled Then
+	'		If Not Me.theSelectedPackerOptions.Contains(compilerOption) Then
+	'			Me.theSelectedPackerOptions.Add(compilerOption)
+	'			Me.theSelectedPackerOptions.Sort()
+	'		End If
+	'	Else
+	'		If Me.theSelectedPackerOptions.Contains(compilerOption) Then
+	'			Me.theSelectedPackerOptions.Remove(compilerOption)
+	'		End If
+	'	End If
+	'End Sub
 
 	Private Sub SetPackerOptionsText()
-		TheApp.Settings.PackOptionsText = ""
-		Me.PackerOptionsTextBox.Text = ""
-		If TheApp.Settings.PackMode = PackInputOptions.ParentFolder Then
-			For Each aChildPath As String In Directory.GetDirectories(TheApp.Settings.PackInputPath)
-				Me.SetPackerOptionsTextPerFolder(aChildPath)
-			Next
-		Else
-			Me.SetPackerOptionsTextPerFolder(TheApp.Settings.PackInputPath)
-		End If
-	End Sub
-
-	Private Sub SetPackerOptionsTextPerFolder(ByVal inputPath As String)
 		Dim selectedIndex As Integer = TheApp.Settings.PackGameSetupSelectedIndex
 		Dim gameSetup As GameSetup = TheApp.Settings.GameSetups(selectedIndex)
 		Dim gamePackerFileName As String = Path.GetFileName(gameSetup.PackerPathFileName)
+		Dim inputPath As String = TheApp.Settings.PackInputPath
+
+		'TODO: [14-May-2022] This block of code should be moved elsewhere.
+		If gamePackerFileName = "gmad.exe" Then
+			Dim pathFileName As String = Path.Combine(inputPath, "addon.json")
+			Dim garrysModAppInfo As GarrysModSteamAppInfo = New GarrysModSteamAppInfo()
+			Dim readIsSuccess As AppEnums.StatusMessage = garrysModAppInfo.ReadDataFromAddonJsonFile(pathFileName, TheApp.Settings.PackGmaTitle, TheApp.Settings.PackGmaItemTags)
+			If readIsSuccess = StatusMessage.Success Then
+				Me.theGmaGarrysModTagsUserControlIsBeingChangedByMe = True
+				Me.GmaGarrysModTagsUserControl.ItemTags = TheApp.Settings.PackGmaItemTags
+				Me.theGmaGarrysModTagsUserControlIsBeingChangedByMe = False
+			Else
+				Me.LogRichTextBox.AppendText(Me.theWarningMessgeAboutInvalidJsonFormat + vbCr)
+			End If
+		End If
+
 		Dim inputFolder As String = Path.GetFileName(inputPath)
 
 		Dim packOptionsText As String = ""
@@ -444,71 +480,31 @@ Public Class PackUserControl
 			packOptionsText += " "
 			packOptionsText += Me.DirectPackerOptionsTextBox.Text
 		End If
+		TheApp.Settings.PackOptionsText = packOptionsText.Trim()
 
-		TheApp.Settings.PackOptionsText = packOptionsText
-
-		Me.PackerOptionsTextBox.Text += """"
+		Me.PackerOptionsTextBox.Text = """"
 		Me.PackerOptionsTextBox.Text += gameSetup.PackerPathFileName
 		Me.PackerOptionsTextBox.Text += """"
+
+		If packOptionsText <> "" Then
+			Me.PackerOptionsTextBox.Text += packOptionsText
+		End If
 		Me.PackerOptionsTextBox.Text += " "
+
 		If gamePackerFileName = "gmad.exe" Then
 			Me.PackerOptionsTextBox.Text += "create -folder "
-
-			Dim pathFileName As String = Path.Combine(inputPath, "addon.json")
-			Dim garrysModAppInfo As GarrysModSteamAppInfo = New GarrysModSteamAppInfo()
-			garrysModAppInfo.ReadDataFromAddonJsonFile(pathFileName, TheApp.Settings.PackGmaTitle, TheApp.Settings.PackGmaItemTags)
-			Me.theGmaGarrysModTagsUserControlIsBeingChangedByMe = True
-			Me.GmaGarrysModTagsUserControl.ItemTags = TheApp.Settings.PackGmaItemTags
-			Me.theGmaGarrysModTagsUserControlIsBeingChangedByMe = False
+		ElseIf TheApp.Settings.PackOptionMultiFileVpkIsChecked Then
+			Me.PackerOptionsTextBox.Text += "-M a "
 		End If
+
 		Me.PackerOptionsTextBox.Text += """"
 		Me.PackerOptionsTextBox.Text += inputFolder
 		Me.PackerOptionsTextBox.Text += """"
-		Me.PackerOptionsTextBox.Text += " "
-		If TheApp.Settings.PackOptionsText.Trim() <> "" Then
-			Me.PackerOptionsTextBox.Text += packOptionsText
-		End If
-		Me.PackerOptionsTextBox.Text += vbCrLf
-	End Sub
 
-	Private Sub CreateVpkResponseFile()
-		Dim vpkResponseFileStream As StreamWriter = Nothing
-		Dim listFileName As String
-		Dim listPathFileName As String
-
-		If Directory.Exists(TheApp.Settings.PackInputPath) Then
-			Try
-				' Create a folder in the Windows Temp path, to prevent potential file collisions and to provide user a more obvious folder name.
-				Dim guid As Guid
-				guid = Guid.NewGuid()
-				Dim tempCrowbarFolder As String
-				tempCrowbarFolder = "Crowbar_" + guid.ToString()
-				Dim tempPath As String = Path.GetTempPath()
-				Dim tempCrowbarPath As String
-				tempCrowbarPath = Path.Combine(tempPath, tempCrowbarFolder)
-				Try
-					FileManager.CreatePath(tempCrowbarPath)
-				Catch ex As Exception
-					Throw New System.Exception("Crowbar tried to create folder path """ + tempCrowbarPath + """, but Windows gave this message: " + ex.Message)
-				End Try
-
-				listFileName = "crowbar_vpk_file_list.txt"
-				listPathFileName = Path.Combine(tempCrowbarPath, listFileName)
-
-				vpkResponseFileStream = File.CreateText(listPathFileName)
-				vpkResponseFileStream.AutoFlush = True
-
-				vpkResponseFileStream.WriteLine("// ")
-				vpkResponseFileStream.Flush()
-			Catch ex As Exception
-				Me.LogRichTextBox.AppendText("ERROR: Crowbar tried to write the VPK response file for multi-file VPK packing, but the system gave this message: " + ex.Message + vbCr)
-			Finally
-				If vpkResponseFileStream IsNot Nothing Then
-					vpkResponseFileStream.Flush()
-					vpkResponseFileStream.Close()
-					vpkResponseFileStream = Nothing
-				End If
-			End Try
+		If gamePackerFileName = "gmad.exe" AndAlso TheApp.Settings.PackOptionIgnoreWhitelistWarningsIsChecked Then
+			Me.PackerOptionsTextBox.Text += " -warninvalid"
+		ElseIf TheApp.Settings.PackOptionMultiFileVpkIsChecked Then
+			Me.PackerOptionsTextBox.Text += " @filelist.txt"
 		End If
 	End Sub
 
@@ -560,10 +556,9 @@ Public Class PackUserControl
 
 #Region "Data"
 
+	Private theWarningMessgeAboutInvalidJsonFormat As String = "WARNING: The addon.json file is invalid json format. Crowbar will overwrite the file with current options."
 	Private theSelectedPackerOptions As List(Of String)
-
 	Private thePackedRelativePathFileNames As BindingListEx(Of String)
-
 	Private theGmaGarrysModTagsUserControlIsBeingChangedByMe As Boolean
 
 #End Region

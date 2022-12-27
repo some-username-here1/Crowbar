@@ -67,26 +67,11 @@ Public Class PublishUserControl
 		'Me.ItemIDTextBox.ContextMenuStrip = Me.ItemIdTextBoxContextMenuStrip
 	End Sub
 
-	'UserControl overrides dispose to clean up the component list.
-	<System.Diagnostics.DebuggerNonUserCode()>
-	Protected Overrides Sub Dispose(ByVal disposing As Boolean)
-		Try
-			If disposing Then
-				Me.Free()
-				If components IsNot Nothing Then
-					components.Dispose()
-				End If
-			End If
-		Finally
-			MyBase.Dispose(disposing)
-		End Try
-	End Sub
-
 #End Region
 
 #Region "Init and Free"
 
-	Private Sub Init()
+	Protected Overrides Sub Init()
 		TheApp.InitAppInfo()
 
 		If TheApp.Settings.PublishGameSelectedIndex >= TheApp.SteamAppInfos.Count Then
@@ -99,7 +84,7 @@ Public Class PublishUserControl
 
 		Me.theBackgroundSteamPipe = New BackgroundSteamPipe()
 
-		Me.GetUserSteamID()
+		'Me.GetUserSteamID()
 
 		Me.theSelectedItemIsChangingViaMe = True
 		Me.theItemBindingSource = New BindingSource()
@@ -111,27 +96,29 @@ Public Class PublishUserControl
 		AddHandler TheApp.Settings.PropertyChanged, AddressOf AppSettings_PropertyChanged
 
 		Me.theSelectedGameIsStillUpdatingInterface = False
-		Me.UpdateSteamAppWidgets()
+		'Me.UpdateSteamAppWidgets()
+		Me.theSelectedGameNeedsRefresh = True
+		Me.UpdateItemListWidgets(True)
 	End Sub
 
-	'NOTE: This is called after all child widgets (created via designer) are disposed but before this UserControl is disposed.
-	Private Sub Free()
+	' Needed for closing any active child processes. Only called on program exit.
+	Protected Overrides Sub Free()
 		If Me.theBackgroundSteamPipe IsNot Nothing Then
 			Me.theBackgroundSteamPipe.Kill()
 		End If
 
-		If Me.theTagsWidget IsNot Nothing Then
-			RemoveHandler Me.theTagsWidget.TagsPropertyChanged, AddressOf Me.TagsWidget_TagsPropertyChanged
-		End If
+		'If Me.theTagsWidget IsNot Nothing Then
+		'	RemoveHandler Me.theTagsWidget.TagsPropertyChanged, AddressOf Me.TagsWidget_TagsPropertyChanged
+		'End If
 
-		If Me.theSelectedItem IsNot Nothing Then
-			If Me.theSelectedItem.IsTemplate AndAlso Me.theSelectedItem.IsChanged Then
-				Me.SaveChangedTemplateToDraft()
-			End If
-			RemoveHandler Me.theSelectedItem.PropertyChanged, AddressOf Me.WorkshopItem_PropertyChanged
-		End If
+		'If Me.theSelectedItem IsNot Nothing Then
+		'	If Me.theSelectedItem.IsTemplate AndAlso Me.theSelectedItem.IsChanged Then
+		'		Me.SaveChangedTemplateToDraft()
+		'	End If
+		'	RemoveHandler Me.theSelectedItem.PropertyChanged, AddressOf Me.WorkshopItem_PropertyChanged
+		'End If
 
-		RemoveHandler TheApp.Settings.PropertyChanged, AddressOf AppSettings_PropertyChanged
+		'RemoveHandler TheApp.Settings.PropertyChanged, AddressOf AppSettings_PropertyChanged
 	End Sub
 
 	Private Sub GetUserSteamID()
@@ -170,9 +157,9 @@ Public Class PublishUserControl
 			Else
 				Dim usedBytes As ULong = totalBytes - availableBytes
 				Dim progressPercentage As Integer = CInt(usedBytes * Me.QuotaProgressBar.Maximum / totalBytes)
-				Dim availableBytesText As String = MathModule.ByteUnitsConversion(availableBytes)
-				Dim usedBytesText As String = MathModule.ByteUnitsConversion(usedBytes)
-				Dim totalBytesText As String = MathModule.ByteUnitsConversion(totalBytes)
+				Dim availableBytesText As String = MathModule.BinaryByteUnitsConversion(availableBytes)
+				Dim usedBytesText As String = MathModule.BinaryByteUnitsConversion(usedBytes)
+				Dim totalBytesText As String = MathModule.BinaryByteUnitsConversion(totalBytes)
 				Me.QuotaProgressBar.Text = availableBytesText + " available "
 				Me.QuotaProgressBar.Value = progressPercentage
 				Me.ToolTip1.SetToolTip(Me.QuotaProgressBar, "Quota: " + usedBytesText + " used of " + totalBytesText + " total (" + progressPercentage.ToString() + "% used)")
@@ -308,6 +295,7 @@ Public Class PublishUserControl
 		'NOTE: For RichTextBox, set the Formatting argument to True when DataSourceUpdateMode.OnPropertyChanged is used, to prevent characters being entered in reverse order.
 		Me.ItemDescriptionTextBox.DataBindings.Add("Text", Me.theItemBindingSource, "Description", True, DataSourceUpdateMode.OnPropertyChanged)
 		Me.ItemChangeNoteTextBox.DataBindings.Add("Text", Me.theItemBindingSource, "ChangeNote", True, DataSourceUpdateMode.OnPropertyChanged)
+		Me.UpdateWordWrapButtons()
 		Me.ItemContentPathFileNameTextBox.DataBindings.Add("Text", Me.theItemBindingSource, "ContentPathFolderOrFileName", False, DataSourceUpdateMode.OnValidation)
 		Me.ItemPreviewImagePathFileNameTextBox.DataBindings.Add("Text", Me.theItemBindingSource, "PreviewImagePathFileName", False, DataSourceUpdateMode.OnValidation)
 
@@ -329,13 +317,15 @@ Public Class PublishUserControl
 
 #Region "Widget Event Handlers"
 
-	Private Sub PublishUserControl_Load(sender As Object, e As EventArgs) Handles MyBase.Load
+	'Private Sub PublishUserControl_Load(sender As Object, e As EventArgs) Handles MyBase.Load
+	'	If Not Me.DesignMode Then
+	'		Me.Init()
+	'	End If
+	'End Sub
+
+	Private Sub PublishUserControl_Resize(sender As Object, e As EventArgs) Handles Me.Resize
 		'NOTE: This code prevents Visual Studio or Windows often inexplicably extending the right side of these widgets.
 		Workarounds.WorkaroundForFrameworkAnchorRightSizingBug(Me.AppIdComboBox, Me.RefreshGameItemsButton)
-
-		If Not Me.DesignMode Then
-			Me.Init()
-		End If
 	End Sub
 
 #End Region
@@ -447,11 +437,13 @@ Public Class PublishUserControl
 	Private Sub ToggleWordWrapForDescriptionCheckBox_CheckedChanged(sender As Object, e As EventArgs) Handles ToggleWordWrapForDescriptionCheckBox.CheckedChanged
 		Me.ToggleWordWrapImageOnCheckbox(CType(sender, CheckBox))
 		Me.ItemDescriptionTextBox.WordWrap = Me.ToggleWordWrapForDescriptionCheckBox.Checked
+		Me.UpdateWordWrapButtons()
 	End Sub
 
 	Private Sub ToggleWordWrapForChangeNoteCheckBox_CheckedChanged(sender As Object, e As EventArgs) Handles ToggleWordWrapForChangeNoteCheckBox.CheckedChanged
 		Me.ToggleWordWrapImageOnCheckbox(CType(sender, CheckBox))
 		Me.ItemChangeNoteTextBox.WordWrap = Me.ToggleWordWrapForChangeNoteCheckBox.Checked
+		Me.UpdateWordWrapButtons()
 	End Sub
 
 	Private Sub BrowseContentPathFileNameButton_Click(sender As Object, e As EventArgs) Handles BrowseItemContentPathFileNameButton.Click
@@ -460,6 +452,16 @@ Public Class PublishUserControl
 
 	Private Sub BrowsePreviewImageButton_Click(sender As Object, e As EventArgs) Handles BrowseItemPreviewImagePathFileNameButton.Click
 		Me.BrowseForPreviewImage()
+	End Sub
+
+	Private Sub ItemPreviewImagePictureBox_Resize(sender As Object, e As EventArgs) Handles ItemPreviewImagePictureBox.Resize
+		' Make sure size stays a square even when theme font changes it.
+		Dim width As Integer = Me.ItemPreviewImagePictureBox.Width
+		Dim height As Integer = Me.ItemPreviewImagePictureBox.Height
+		If width <> height Then
+			Dim length As Integer = Math.Min(width, height)
+			Me.ItemPreviewImagePictureBox.Size = New System.Drawing.Size(length, length)
+		End If
 	End Sub
 
 	Private Sub SaveAsTemplateOrDraftItemButton_Click(sender As Object, e As EventArgs) Handles SaveAsTemplateOrDraftItemButton.Click
@@ -509,6 +511,8 @@ Public Class PublishUserControl
 			TheApp.Settings.PublishSearchText = ""
 
 			Me.UpdateSteamAppWidgets()
+			'Me.theSelectedGameNeedsRefresh = True
+			'Me.UpdateItemListWidgets(True)
 		End If
 	End Sub
 
@@ -811,11 +815,25 @@ Public Class PublishUserControl
 
 #Region "Private Methods"
 
+	Private Sub UpdateWordWrapButtons()
+		If Me.ToggleWordWrapForDescriptionCheckBox.Checked Then
+			Me.ToolTip1.SetToolTip(Me.ToggleWordWrapForDescriptionCheckBox, My.Resources.ToggleWordWrapCurrentlyOn)
+		Else
+			Me.ToolTip1.SetToolTip(Me.ToggleWordWrapForDescriptionCheckBox, My.Resources.ToggleWordWrapCurrentlyOff)
+		End If
+		If Me.ToggleWordWrapForChangeNoteCheckBox.Checked Then
+			Me.ToolTip1.SetToolTip(Me.ToggleWordWrapForChangeNoteCheckBox, My.Resources.ToggleWordWrapCurrentlyOn)
+		Else
+			Me.ToolTip1.SetToolTip(Me.ToggleWordWrapForChangeNoteCheckBox, My.Resources.ToggleWordWrapCurrentlyOff)
+		End If
+	End Sub
+
 	Private Sub UpdateSteamAppWidgets()
 		'NOTE: If this has not been created, then app is in not far enough in Init() and not ready for update.
 		If Me.theEntireListOfItems Is Nothing OrElse Me.theSelectedGameIsStillUpdatingInterface Then
 			Exit Sub
 		End If
+		Me.theSelectedGameNeedsRefresh = False
 		Me.theSelectedGameIsStillUpdatingInterface = True
 
 		If Me.LogTextBox.Text <> "" Then
@@ -824,7 +842,7 @@ Public Class PublishUserControl
 
 		Me.theSteamAppInfo = TheApp.SteamAppInfos(TheApp.Settings.PublishGameSelectedIndex)
 		Me.theSteamAppId = Me.theSteamAppInfo.ID
-		TheApp.WriteSteamAppIdFile(Me.theSteamAppId.m_AppId)
+		TheApp.SetSteamAppId(Me.theSteamAppId.m_AppId)
 
 		Me.theSteamAppUserInfo = Nothing
 		Try
@@ -878,7 +896,7 @@ Public Class PublishUserControl
 	End Sub
 
 	Private Sub SwapSteamAppTagsWidget()
-		If theTagsWidget IsNot Nothing Then
+		If Me.theTagsWidget IsNot Nothing Then
 			RemoveHandler Me.theTagsWidget.TagsPropertyChanged, AddressOf Me.TagsWidget_TagsPropertyChanged
 		End If
 
@@ -918,7 +936,7 @@ Public Class PublishUserControl
 		End If
 		'NOTE: This line does not update the widgets connected to the list fields.
 		Me.ItemsDataGridView.Rows(selectedRowIndex).Selected = True
-		'NOTE: This line is required so that the item detail widgets update when the gird selection is changed programmatically.
+		'NOTE: This line is required so that the item detail widgets update when the grid selection is changed programmatically.
 		Me.ItemsDataGridView.CurrentCell = Me.ItemsDataGridView.Rows(selectedRowIndex).Cells(0)
 		Me.ItemsDataGridView.FirstDisplayedScrollingRowIndex = selectedRowIndex
 	End Sub
@@ -1091,50 +1109,50 @@ Public Class PublishUserControl
 			End If
 		End If
 
-		'Dim draftItemsDisplayedCount As UInteger = CUInt(Me.theSteamAppUserInfo.DraftTemplateAndChangedItems.Count - Me.theTemplateItemDisplayedCount - Me.theChangedItemDisplayedCount)
-		'Dim publishedItemsDisplayedCount As UInteger = CUInt(Me.theDisplayedItems.Count - Me.theSteamAppUserInfo.DraftTemplateAndChangedItems.Count)
-		'Dim draftItemsTotalCount As UInteger = CUInt(Me.theSteamAppUserInfo.DraftTemplateAndChangedItems.Count - Me.theTemplateItemTotalCount - Me.theChangedItemTotalCount)
-		'Dim publishedItemsTotalCount As UInteger = CUInt(Me.theEntireListOfItems.Count - Me.theSteamAppUserInfo.DraftTemplateAndChangedItems.Count)
-		Dim draftItemsDisplayedCount As UInteger = Me.theDisplayedItems.DraftItemCount
-		Dim publishedItemsDisplayedCount As UInteger = Me.theDisplayedItems.PublishedItemCount
-		Dim draftItemsTotalCount As UInteger = Me.theEntireListOfItems.DraftItemCount
-		Dim publishedItemsTotalCount As UInteger = Me.theEntireListOfItems.PublishedItemCount
-
-		Me.ItemCountsToolStripLabel.Text = ""
-		If Me.theDisplayedItems.Count <> Me.theEntireListOfItems.Count Then
-			Me.ItemCountsToolStripLabel.Text += draftItemsDisplayedCount.ToString() + "/"
-		End If
-		Me.ItemCountsToolStripLabel.Text += draftItemsTotalCount.ToString() + " draft + "
-		If Me.theDisplayedItems.Count <> Me.theEntireListOfItems.Count Then
-			'Me.ItemCountsToolStripLabel.Text += Me.theTemplateItemDisplayedCount.ToString() + "/"
-			Me.ItemCountsToolStripLabel.Text += Me.theDisplayedItems.TemplateItemCount.ToString() + "/"
-		End If
-		'Me.ItemCountsToolStripLabel.Text += Me.theTemplateItemTotalCount.ToString() + " template + "
-		Me.ItemCountsToolStripLabel.Text += Me.theEntireListOfItems.TemplateItemCount.ToString() + " template + "
-		If Me.theDisplayedItems.Count <> Me.theEntireListOfItems.Count Then
-			'Me.ItemCountsToolStripLabel.Text += Me.theChangedItemDisplayedCount.ToString() + "/"
-			Me.ItemCountsToolStripLabel.Text += Me.theDisplayedItems.ChangedItemCount.ToString() + "/"
-		End If
-		'Me.ItemCountsToolStripLabel.Text += Me.theChangedItemTotalCount.ToString() + " changed + "
-		Me.ItemCountsToolStripLabel.Text += Me.theEntireListOfItems.ChangedItemCount.ToString() + " changed + "
-		If Me.theDisplayedItems.Count <> Me.theEntireListOfItems.Count Then
-			Me.ItemCountsToolStripLabel.Text += publishedItemsDisplayedCount.ToString() + "/"
-		End If
-		Me.ItemCountsToolStripLabel.Text += publishedItemsTotalCount.ToString() + " published"
-		If isProgress Then
-			Dim remainingPublishedItemsCount As UInteger = Me.theExpectedPublishedItemCount - publishedItemsTotalCount
-			Me.ItemCountsToolStripLabel.Text += " (" + remainingPublishedItemsCount.ToString() + " more to get)"
+		If Me.theSelectedGameNeedsRefresh OrElse Me.theUserSteamID = 0 Then
+			Me.ItemCountsToolStripLabel.Text = "Refresh to see list"
 		Else
-			'If (publishedItemsTotalCount + Me.theChangedItemTotalCount) <> Me.theExpectedPublishedItemCount Then
-			If (publishedItemsTotalCount + Me.theEntireListOfItems.ChangedItemCount) <> Me.theExpectedPublishedItemCount Then
-				Me.ItemCountsToolStripLabel.Text += " (" + Me.theExpectedPublishedItemCount.ToString() + " expected)"
+			Dim draftItemsDisplayedCount As UInteger = Me.theDisplayedItems.DraftItemCount
+			Dim publishedItemsDisplayedCount As UInteger = Me.theDisplayedItems.PublishedItemCount
+			Dim draftItemsTotalCount As UInteger = Me.theEntireListOfItems.DraftItemCount
+			Dim publishedItemsTotalCount As UInteger = Me.theEntireListOfItems.PublishedItemCount
+
+			Me.ItemCountsToolStripLabel.Text = ""
+			If Me.theDisplayedItems.Count <> Me.theEntireListOfItems.Count Then
+				Me.ItemCountsToolStripLabel.Text += draftItemsDisplayedCount.ToString() + "/"
 			End If
+			Me.ItemCountsToolStripLabel.Text += draftItemsTotalCount.ToString() + " draft + "
+			If Me.theDisplayedItems.Count <> Me.theEntireListOfItems.Count Then
+				'Me.ItemCountsToolStripLabel.Text += Me.theTemplateItemDisplayedCount.ToString() + "/"
+				Me.ItemCountsToolStripLabel.Text += Me.theDisplayedItems.TemplateItemCount.ToString() + "/"
+			End If
+			'Me.ItemCountsToolStripLabel.Text += Me.theTemplateItemTotalCount.ToString() + " template + "
+			Me.ItemCountsToolStripLabel.Text += Me.theEntireListOfItems.TemplateItemCount.ToString() + " template + "
+			If Me.theDisplayedItems.Count <> Me.theEntireListOfItems.Count Then
+				'Me.ItemCountsToolStripLabel.Text += Me.theChangedItemDisplayedCount.ToString() + "/"
+				Me.ItemCountsToolStripLabel.Text += Me.theDisplayedItems.ChangedItemCount.ToString() + "/"
+			End If
+			'Me.ItemCountsToolStripLabel.Text += Me.theChangedItemTotalCount.ToString() + " changed + "
+			Me.ItemCountsToolStripLabel.Text += Me.theEntireListOfItems.ChangedItemCount.ToString() + " changed + "
+			If Me.theDisplayedItems.Count <> Me.theEntireListOfItems.Count Then
+				Me.ItemCountsToolStripLabel.Text += publishedItemsDisplayedCount.ToString() + "/"
+			End If
+			Me.ItemCountsToolStripLabel.Text += publishedItemsTotalCount.ToString() + " published"
+			If isProgress Then
+				Dim remainingPublishedItemsCount As UInteger = Me.theExpectedPublishedItemCount - publishedItemsTotalCount
+				Me.ItemCountsToolStripLabel.Text += " (" + remainingPublishedItemsCount.ToString() + " more to get)"
+			Else
+				'If (publishedItemsTotalCount + Me.theChangedItemTotalCount) <> Me.theExpectedPublishedItemCount Then
+				If (publishedItemsTotalCount + Me.theEntireListOfItems.ChangedItemCount) <> Me.theExpectedPublishedItemCount Then
+					Me.ItemCountsToolStripLabel.Text += " (" + Me.theExpectedPublishedItemCount.ToString() + " expected)"
+				End If
+			End If
+			Me.ItemCountsToolStripLabel.Text += " = "
+			If Me.theDisplayedItems.Count <> Me.theEntireListOfItems.Count Then
+				Me.ItemCountsToolStripLabel.Text += Me.theDisplayedItems.Count.ToString() + "/"
+			End If
+			Me.ItemCountsToolStripLabel.Text += Me.theEntireListOfItems.Count.ToString() + " total"
 		End If
-		Me.ItemCountsToolStripLabel.Text += " = "
-		If Me.theDisplayedItems.Count <> Me.theEntireListOfItems.Count Then
-			Me.ItemCountsToolStripLabel.Text += Me.theDisplayedItems.Count.ToString() + "/"
-		End If
-		Me.ItemCountsToolStripLabel.Text += Me.theEntireListOfItems.Count.ToString() + " total"
 	End Sub
 
 	Private Sub UpdateItemDetails()
@@ -1261,28 +1279,28 @@ Public Class PublishUserControl
 			Me.ItemContentFolderOrFileLabel.Text = "Content Folder or File"
 			If Directory.Exists(Me.theSelectedItem.ContentPathFolderOrFileName) Then
 				Dim folderSize As ULong = FileManager.GetFolderSize(Me.theSelectedItem.ContentPathFolderOrFileName)
-				contentFileSizeText = MathModule.ByteUnitsConversion(folderSize)
+				contentFileSizeText = MathModule.BinaryByteUnitsConversion(folderSize)
 			ElseIf File.Exists(Me.theSelectedItem.ContentPathFolderOrFileName) Then
 				Dim aFile As New FileInfo(Me.theSelectedItem.ContentPathFolderOrFileName)
-				contentFileSizeText = MathModule.ByteUnitsConversion(CULng(aFile.Length))
+				contentFileSizeText = MathModule.BinaryByteUnitsConversion(CULng(aFile.Length))
 			ElseIf Me.theSelectedItem.ContentSize > 0 AndAlso Me.theSelectedItem.IsPublished Then
-				contentFileSizeText = MathModule.ByteUnitsConversion(CULng(Me.theSelectedItem.ContentSize))
+				contentFileSizeText = MathModule.BinaryByteUnitsConversion(CULng(Me.theSelectedItem.ContentSize))
 			End If
 		ElseIf TheApp.SteamAppInfos(TheApp.Settings.PublishGameSelectedIndex).UsesSteamUGC Then
 			Me.ItemContentFolderOrFileLabel.Text = "Content Folder"
 			If Directory.Exists(Me.theSelectedItem.ContentPathFolderOrFileName) Then
 				Dim folderSize As ULong = FileManager.GetFolderSize(Me.theSelectedItem.ContentPathFolderOrFileName)
-				contentFileSizeText = MathModule.ByteUnitsConversion(folderSize)
+				contentFileSizeText = MathModule.BinaryByteUnitsConversion(folderSize)
 			ElseIf Me.theSelectedItem.ContentSize > 0 AndAlso Me.theSelectedItem.IsPublished Then
-				contentFileSizeText = MathModule.ByteUnitsConversion(CULng(Me.theSelectedItem.ContentSize))
+				contentFileSizeText = MathModule.BinaryByteUnitsConversion(CULng(Me.theSelectedItem.ContentSize))
 			End If
 		Else
 			Me.ItemContentFolderOrFileLabel.Text = "Content File"
 			If File.Exists(Me.theSelectedItem.ContentPathFolderOrFileName) Then
 				Dim aFile As New FileInfo(Me.theSelectedItem.ContentPathFolderOrFileName)
-				contentFileSizeText = MathModule.ByteUnitsConversion(CULng(aFile.Length))
+				contentFileSizeText = MathModule.BinaryByteUnitsConversion(CULng(aFile.Length))
 			ElseIf Me.theSelectedItem.ContentSize > 0 AndAlso Me.theSelectedItem.IsPublished Then
-				contentFileSizeText = MathModule.ByteUnitsConversion(CULng(Me.theSelectedItem.ContentSize))
+				contentFileSizeText = MathModule.BinaryByteUnitsConversion(CULng(Me.theSelectedItem.ContentSize))
 			End If
 		End If
 		'Dim contentFileSizeMaxText As String = "<unknown>"
@@ -1305,9 +1323,9 @@ Public Class PublishUserControl
 		Dim previewImageSizeText As String = "0"
 		If File.Exists(Me.theSelectedItem.PreviewImagePathFileName) Then
 			Dim aFile As New FileInfo(Me.theSelectedItem.PreviewImagePathFileName)
-			previewImageSizeText = MathModule.ByteUnitsConversion(CULng(aFile.Length))
+			previewImageSizeText = MathModule.BinaryByteUnitsConversion(CULng(aFile.Length))
 		ElseIf Me.theSelectedItem.PreviewImageSize > 0 AndAlso Me.theSelectedItem.IsPublished Then
-			previewImageSizeText = MathModule.ByteUnitsConversion(CULng(Me.theSelectedItem.PreviewImageSize))
+			previewImageSizeText = MathModule.BinaryByteUnitsConversion(CULng(Me.theSelectedItem.PreviewImageSize))
 		End If
 		'Dim previewImageSizeMaxText As String = "<unknown>"
 		Dim changedMarker As String = ""
@@ -1381,26 +1399,26 @@ Public Class PublishUserControl
 
 	' Copy the image into memory, so the image file can be deleted.
 	Private Sub DeleteInUseTempPreviewImageFile(ByVal itemPreviewImagePathFileName As String, ByVal itemID As String)
-        Dim img As Image = Nothing
+		Dim img As Image = Nothing
 
-        Try
-            If File.Exists(itemPreviewImagePathFileName) Then
-                img = Image.FromFile(itemPreviewImagePathFileName)
-                If Me.ItemPreviewImagePictureBox.Image IsNot Nothing Then
-                    Me.ItemPreviewImagePictureBox.Image.Dispose()
-                End If
-                Me.ItemPreviewImagePictureBox.Image = New Bitmap(img)
-                img.Dispose()
-            End If
-        Catch ex As Exception
-            If img IsNot Nothing Then
-                img.Dispose()
-                img = Nothing
-            End If
-        End Try
+		Try
+			If File.Exists(itemPreviewImagePathFileName) Then
+				img = Image.FromFile(itemPreviewImagePathFileName)
+				If Me.ItemPreviewImagePictureBox.Image IsNot Nothing Then
+					Me.ItemPreviewImagePictureBox.Image.Dispose()
+				End If
+				Me.ItemPreviewImagePictureBox.Image = New Bitmap(img)
+				img.Dispose()
+			End If
+		Catch ex As Exception
+			If img IsNot Nothing Then
+				img.Dispose()
+				img = Nothing
+			End If
+		End Try
 
-        Me.DeleteTempPreviewImageFile(itemPreviewImagePathFileName, itemID)
-    End Sub
+		Me.DeleteTempPreviewImageFile(itemPreviewImagePathFileName, itemID)
+	End Sub
 
 	Private Sub DeleteTempPreviewImageFile(ByVal itemPreviewImagePathFileName As String, ByVal itemID As String)
 		Dim previewImagePathFileName As String = Me.GetPreviewImagePathFileName(itemPreviewImagePathFileName, itemID, 0)
@@ -1483,6 +1501,11 @@ Public Class PublishUserControl
 
 		'NOTE: SteamRemoteStorage_PublishWorkshopFile requires Item to have a Title, a Description, a Content File, and a Preview Image.
 		Me.PublishItemButton.Enabled = (((Me.theSelectedItem.IsDraft) AndAlso (Me.theSelectedItem.Title <> "" AndAlso Me.theSelectedItem.Description <> "" AndAlso Me.theSelectedItem.ContentPathFolderOrFileName <> "" AndAlso Me.theSelectedItem.PreviewImagePathFileName <> "")) OrElse (Me.theSelectedItem.IsChanged AndAlso (Me.theUserSteamID = Me.theSelectedItem.OwnerID)) OrElse (Me.theSelectedItem.IsTemplate))
+		If Me.theSelectedItem.IsPublished Then
+			Me.PublishItemButton.Text = "Update"
+		Else
+			Me.PublishItemButton.Text = "Publish"
+		End If
 	End Sub
 
 	Private Sub SwapBetweenOwnerNameAndID()
@@ -1847,6 +1870,7 @@ Public Class PublishUserControl
 	Private theDisplayedItems As WorkshopItemBindingList
 	Private theEntireListOfItems As WorkshopItemBindingList
 	Private theSelectedGameIsStillUpdatingInterface As Boolean
+	Private theSelectedGameNeedsRefresh As Boolean
 
 	Private theTagsWidget As Base_TagsUserControl
 
@@ -1860,16 +1884,6 @@ Public Class PublishUserControl
 	Private theUnchangedSelectedTemplateItem As WorkshopItem
 
 	Private theBackgroundSteamPipe As BackgroundSteamPipe
-
-	Private Sub ItemPreviewImagePictureBox_Resize(sender As Object, e As EventArgs) Handles ItemPreviewImagePictureBox.Resize
-		' Make sure size stays a square even when theme font changes it.
-		Dim width As Integer = Me.ItemPreviewImagePictureBox.Width
-		Dim height As Integer = Me.ItemPreviewImagePictureBox.Height
-		If width <> height Then
-			Dim length As Integer = Math.Min(width, height)
-			Me.ItemPreviewImagePictureBox.Size = New System.Drawing.Size(length, length)
-		End If
-	End Sub
 
 #End Region
 

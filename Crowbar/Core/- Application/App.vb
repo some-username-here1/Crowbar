@@ -187,6 +187,9 @@ Public Class App
 		Me.LzmaExePathFileName = Path.Combine(Me.GetCustomDataPath(), App.theLzmaExeFileName)
 		Me.WriteResourceToFileIfDifferent(My.Resources.lzma, Me.LzmaExePathFileName)
 
+		Dim lzhamAPIDLLPathFileName As String = Path.Combine(Me.GetCustomDataPath(), App.theLzhamDLLFileName)
+		Me.WriteResourceToFileIfDifferent(My.Resources.lzham_x86, lzhamAPIDLLPathFileName)
+
 		'NOTE: Only write settings file if it does not exist.
 		Dim appSettingsPathFileName As String = Path.Combine(Me.GetCustomDataPath(), App.theAppSettingsFileName)
 		Try
@@ -229,15 +232,13 @@ Public Class App
 		End Try
 	End Sub
 
-	Public Sub WriteSteamAppIdFile(ByVal appID As UInteger)
-		Me.WriteSteamAppIdFile(appID.ToString())
+	Public Sub SetSteamAppId(ByVal appID As UInteger)
+		Me.SetSteamAppId(appID.ToString())
 	End Sub
 
-	Public Sub WriteSteamAppIdFile(ByVal appID_text As String)
-		Dim steamAppIDPathFileName As String = Path.Combine(Me.GetCustomDataPath(), App.theSteamAppIDFileName)
-		Using sw As StreamWriter = File.CreateText(steamAppIDPathFileName)
-			sw.WriteLine(appID_text)
-		End Using
+	Public Sub SetSteamAppId(ByVal appID_text As String)
+		Environment.SetEnvironmentVariable("SteamAppId", appID_text)
+		Environment.SetEnvironmentVariable("SteamGameId", appID_text)
 	End Sub
 
 	Public Function GetDebugPath(ByVal outputPath As String, ByVal modelName As String) As String
@@ -332,7 +333,7 @@ Public Class App
 			Try
 				VersionModule.ConvertSettingsFile(appSettingsPathFileName)
 				Me.theSettings = CType(FileManager.ReadXml(GetType(AppSettings), appSettingsPathFileName), AppSettings)
-			Catch
+			Catch ex As Exception
 				Me.CreateAppSettings()
 			End Try
 		Else
@@ -460,6 +461,7 @@ Public Class App
 	Private Const theSevenZrEXEFileName As String = "7zr.exe"
 	Private Const theCrowbarLauncherEXEFileName As String = "CrowbarLauncher.exe"
 	Private Const theLzmaExeFileName As String = "lzma.exe"
+	Private Const theLzhamDLLFileName As String = "lzham_x86.dll"
 	Public SevenZrExePathFileName As String
 	Public CrowbarLauncherExePathFileName As String
 	Public LzmaExePathFileName As String

@@ -381,7 +381,7 @@ Public Class SourceQcFile53
 					Next
 				End If
 			End If
-		Catch
+		Catch ex As Exception
 		End Try
 
 		Me.CreateListOfEyelidFlexFrameIndexes()
@@ -733,6 +733,8 @@ Public Class SourceQcFile53
 		'NOTE: Writes out flexcontrollers correctly for teenangst zoey.
 		If Me.theMdlFileData.theFlexControllers IsNot Nothing AndAlso Me.theMdlFileData.theFlexControllers.Count > 0 Then
 			Dim aFlexController As SourceMdlFlexController
+			Dim flexControllerNames As New List(Of String)()
+			Dim commentOperatorText As String
 
 			line = ""
 			Me.theOutputFileStreamWriter.WriteLine(line)
@@ -740,7 +742,18 @@ Public Class SourceQcFile53
 			For i As Integer = 0 To Me.theMdlFileData.theFlexControllers.Count - 1
 				aFlexController = Me.theMdlFileData.theFlexControllers(i)
 
+				If flexControllerNames.Contains(aFlexController.theName) Then
+					line = vbTab
+					line += "// Although in the original model, the line below is a duplicate of a line above and is commented-out to avoid problems in Source Filmmaker (and possibly other tools)."
+					Me.theOutputFileStreamWriter.WriteLine(line)
+					commentOperatorText = "//"
+				Else
+					flexControllerNames.Add(aFlexController.theName)
+					commentOperatorText = ""
+				End If
+
 				line = vbTab
+				line += commentOperatorText
 				line += "flexcontroller "
 				line += aFlexController.theType
 				line += " "
@@ -780,7 +793,8 @@ Public Class SourceQcFile53
 
 			For i As Integer = 0 To Me.theMdlFileData.theFlexRules.Count - 1
 				aFlexRule = Me.theMdlFileData.theFlexRules(i)
-				line = Me.GetFlexRule(aFlexRule)
+				'line = Me.GetFlexRule(aFlexRule)
+				line = Common.GetFlexRule(Me.theMdlFileData.theFlexDescs, Me.theMdlFileData.theFlexControllers, aFlexRule)
 				Me.theOutputFileStreamWriter.WriteLine(line)
 			Next
 		End If
@@ -2363,7 +2377,7 @@ Public Class SourceQcFile53
 		If (aSequenceDesc.flags And SourceMdlAnimationDesc.STUDIO_CYCLEPOSE) > 0 Then
 			line = vbTab
 			line += "posecycle "
-			line += aSequenceDesc.cyclePoseIndex.ToString(TheApp.InternalNumberFormat)
+			line += Me.theMdlFileData.thePoseParamDescs(aSequenceDesc.cyclePoseIndex).theName
 			Me.theOutputFileStreamWriter.WriteLine(line)
 		End If
 
@@ -3048,7 +3062,7 @@ Public Class SourceQcFile53
 			'      For example, L4D2 van has several convex shapes, but only one solid and one bone.
 			'      Same for w_minigun. Both use $concave.
 			'If Me.theSourceEngineModel.thePhyFileHeader.solidCount = 1 Then
-			If Me.thePhyFileData.theSourcePhyIsCollisionModel Then
+			If Me.thePhyFileData.theSourcePhyCollisionDatas.Count = 1 Then
 				If TheApp.Settings.DecompileQcUseMixedCaseForKeywordsIsChecked Then
 					line = "$CollisionModel "
 				Else
@@ -3081,7 +3095,7 @@ Public Class SourceQcFile53
 	'$assumeworldspace
 	'$automass          // baked-in as mass
 	'$concave           // done
-	'$concaveperjoint
+	'$concaveperjoint   // done
 	'$damping           // done
 	'$drag
 	'$inertia           // done
@@ -3138,6 +3152,16 @@ Public Class SourceQcFile53
 			line += Me.thePhyFileData.theSourcePhyMaxConvexPieces.ToString()
 			Me.theOutputFileStreamWriter.WriteLine(line)
 		End If
+		If Me.thePhyFileData.theSourcePhyCollisionDatas.Count > 1 Then
+			For Each collisionData As SourcePhyCollisionData In Me.thePhyFileData.theSourcePhyCollisionDatas
+				If collisionData.theConvexMeshes.Count > 1 Then
+					line = vbTab
+					line += "$concaveperjoint"
+					Me.theOutputFileStreamWriter.WriteLine(line)
+					Exit For
+				End If
+			Next
+		End If
 
 		For i As Integer = 0 To Me.thePhyFileData.theSourcePhyPhysCollisionModels.Count - 1
 			Dim aSourcePhysCollisionModel As SourcePhyPhysCollisionModel
@@ -3188,6 +3212,19 @@ Public Class SourceQcFile53
 			If Me.thePhyFileData.theSourcePhyRagdollConstraintDescs.ContainsKey(aSourcePhysCollisionModel.theIndex) Then
 				Dim aConstraint As SourcePhyRagdollConstraint
 				aConstraint = Me.thePhyFileData.theSourcePhyRagdollConstraintDescs(aSourcePhysCollisionModel.theIndex)
+
+				'FROM: [44] SourceEngine2006_source\utils\studiomdl\collisionmodel.cpp
+				'FROM: [48] SourceEngine2007_source se2007_src [VS2017]\src_main\utils\studiomdl\collisionmodel.cpp
+				'FROM: [49] csgo_studiomdl\utils\studiomdl\collisionmodel.cpp
+				'	// In the editor/qc friction values are shown as 5X so 1.0 can be the default.
+				'	CJointConstraint *pConstraint = new CJointConstraint( pJointName, axis, jointType, limitMin, limitMax, friction * (1.0f/5.0f) );
+				Dim xFrictionValue As Double
+				xFrictionValue = aConstraint.theXFriction * 5
+				Dim yFrictionValue As Double
+				yFrictionValue = aConstraint.theYFriction * 5
+				Dim zFrictionValue As Double
+				zFrictionValue = aConstraint.theZFriction * 5
+
 				line = vbTab
 				line += "$jointconstrain """
 				line += aSourcePhysCollisionModel.theName
@@ -3196,7 +3233,7 @@ Public Class SourceQcFile53
 				line += " "
 				line += aConstraint.theXMax.ToString("0.######", TheApp.InternalNumberFormat)
 				line += " "
-				line += aConstraint.theXFriction.ToString("0.######", TheApp.InternalNumberFormat)
+				line += xFrictionValue.ToString("0.######", TheApp.InternalNumberFormat)
 				Me.theOutputFileStreamWriter.WriteLine(line)
 				line = vbTab
 				line += "$jointconstrain """
@@ -3206,7 +3243,7 @@ Public Class SourceQcFile53
 				line += " "
 				line += aConstraint.theYMax.ToString("0.######", TheApp.InternalNumberFormat)
 				line += " "
-				line += aConstraint.theYFriction.ToString("0.######", TheApp.InternalNumberFormat)
+				line += yFrictionValue.ToString("0.######", TheApp.InternalNumberFormat)
 				Me.theOutputFileStreamWriter.WriteLine(line)
 				line = vbTab
 				line += "$jointconstrain """
@@ -3216,7 +3253,7 @@ Public Class SourceQcFile53
 				line += " "
 				line += aConstraint.theZMax.ToString("0.######", TheApp.InternalNumberFormat)
 				line += " "
-				line += aConstraint.theZFriction.ToString("0.######", TheApp.InternalNumberFormat)
+				line += zFrictionValue.ToString("0.######", TheApp.InternalNumberFormat)
 				Me.theOutputFileStreamWriter.WriteLine(line)
 			End If
 		Next

@@ -167,7 +167,7 @@ Public Class SourceSmdFile36
 					End If
 				Next
 			End If
-		Catch
+		Catch ex As Exception
 
 		End Try
 
@@ -186,7 +186,7 @@ Public Class SourceSmdFile36
 		Dim aBone As SourceMdlBone37
 		Dim boneIndex As Integer
 		Dim aTriangle As SourcePhyFace
-		Dim faceSection As SourcePhyFaceSection
+		Dim faceSection As SourcePhyConvexMesh
 		Dim phyVertex As SourcePhyVertex
 		Dim aVectorTransformed As SourceVector
 		Dim aSourcePhysCollisionModel As SourcePhyPhysCollisionModel
@@ -202,8 +202,8 @@ Public Class SourceSmdFile36
 						aSourcePhysCollisionModel = Nothing
 					End If
 
-					For faceSectionIndex As Integer = 0 To collisionData.theFaceSections.Count - 1
-						faceSection = collisionData.theFaceSections(faceSectionIndex)
+					For faceSectionIndex As Integer = 0 To collisionData.theConvexMeshes.Count - 1
+						faceSection = collisionData.theConvexMeshes(faceSectionIndex)
 
 						If faceSection.theBoneIndex >= Me.theMdlFileData.theBones.Count Then
 							Continue For
@@ -472,11 +472,11 @@ Public Class SourceSmdFile36
 		Try
 			aVtxVertexIndex = aStripGroup.theVtxIndexes(aVtxIndexIndex)
 			aVtxVertex = aStripGroup.theVtxVertexes(aVtxVertexIndex)
-			If Me.theMdlFileData.version = 35 Then
-				vertexIndex = aVtxVertex.originalMeshVertexIndex + meshVertexIndexStart
-			Else
-				vertexIndex = aVtxVertex.originalMeshVertexIndex + bodyPartVertexIndexStart + meshVertexIndexStart
-			End If
+			'If Me.theMdlFileData.version = 35 Then
+			vertexIndex = aVtxVertex.originalMeshVertexIndex + meshVertexIndexStart
+			'Else
+			'	vertexIndex = aVtxVertex.originalMeshVertexIndex + bodyPartVertexIndexStart + meshVertexIndexStart
+			'End If
 			'aVertex = Me.theMdlFileData.theBodyParts(0).theModels(0).theVertexes(vertexIndex)
 			aVertex = aBodyModel.theVertexes(vertexIndex)
 

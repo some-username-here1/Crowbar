@@ -15,7 +15,7 @@ Public Class CompileUserControl
 
 #Region "Init and Free"
 
-	Private Sub Init()
+	Protected Overrides Sub Init()
 		Me.QcPathFileNameTextBox.DataBindings.Add("Text", TheApp.Settings, "CompileQcPathFileName", False, DataSourceUpdateMode.OnValidation)
 
 		Me.OutputPathTextBox.DataBindings.Add("Text", TheApp.Settings, "CompileOutputFullPath", False, DataSourceUpdateMode.OnValidation)
@@ -23,6 +23,8 @@ Public Class CompileUserControl
 		Me.InitOutputPathComboBox()
 		Me.UpdateOutputPathWidgets()
 
+		'NOTE: Prevent changing this combobox's SelectedIndex when another combobox's (which also accesses "SelectedIndex" and TheApp.Settings) SelectedIndex changes.
+		Me.GameSetupComboBox.BindingContext = New BindingContext()
 		'NOTE: The DataSource, DisplayMember, and ValueMember need to be set before DataBindings, or else an exception is raised.
 		Me.GameSetupComboBox.DisplayMember = "GameName"
 		Me.GameSetupComboBox.ValueMember = "GameName"
@@ -72,6 +74,7 @@ Public Class CompileUserControl
 
 	Private Sub InitCompilerOptions()
 		Me.theSelectedCompilerOptions = New List(Of String)()
+		Me.theCompileOptionsDirectTextIsBeingChangedByMe = False
 
 		' GoldSource
 
@@ -85,30 +88,33 @@ Public Class CompileUserControl
 		Me.CompilerOptionNoP4CheckBox.DataBindings.Add("Checked", TheApp.Settings, "CompileOptionNoP4IsChecked", False, DataSourceUpdateMode.OnPropertyChanged)
 		Me.CompilerOptionVerboseCheckBox.DataBindings.Add("Checked", TheApp.Settings, "CompileOptionVerboseIsChecked", False, DataSourceUpdateMode.OnPropertyChanged)
 		Me.UpdateCompilerOptionDefineBonesWidgets()
+
+		Me.DirectCompilerOptionsTextBox.DataBindings.Add("Text", TheApp.Settings, "CompileOptionsDirectText", False, DataSourceUpdateMode.OnPropertyChanged)
 	End Sub
 
-	Private Sub Free()
-		RemoveHandler Me.QcPathFileNameTextBox.DataBindings("Text").Parse, AddressOf FileManager.ParsePathFileName
-		RemoveHandler Me.OutputPathTextBox.DataBindings("Text").Parse, AddressOf FileManager.ParsePathFileName
-		RemoveHandler TheApp.Settings.PropertyChanged, AddressOf AppSettings_PropertyChanged
-		RemoveHandler TheApp.Compiler.ProgressChanged, AddressOf Me.CompilerBackgroundWorker_ProgressChanged
-		RemoveHandler TheApp.Compiler.RunWorkerCompleted, AddressOf Me.CompilerBackgroundWorker_RunWorkerCompleted
+	' Do not need Free() because this widget is destroyed only on program exit.
+	'Protected Overrides Sub Free()
+	'	RemoveHandler Me.QcPathFileNameTextBox.DataBindings("Text").Parse, AddressOf FileManager.ParsePathFileName
+	'	RemoveHandler Me.OutputPathTextBox.DataBindings("Text").Parse, AddressOf FileManager.ParsePathFileName
+	'	RemoveHandler TheApp.Settings.PropertyChanged, AddressOf AppSettings_PropertyChanged
+	'	RemoveHandler TheApp.Compiler.ProgressChanged, AddressOf Me.CompilerBackgroundWorker_ProgressChanged
+	'	RemoveHandler TheApp.Compiler.RunWorkerCompleted, AddressOf Me.CompilerBackgroundWorker_RunWorkerCompleted
 
-		Me.QcPathFileNameTextBox.DataBindings.Clear()
+	'	Me.QcPathFileNameTextBox.DataBindings.Clear()
 
-		Me.OutputPathTextBox.DataBindings.Clear()
-		Me.OutputSubfolderTextBox.DataBindings.Clear()
+	'	Me.OutputPathTextBox.DataBindings.Clear()
+	'	Me.OutputSubfolderTextBox.DataBindings.Clear()
 
-		Me.GameSetupComboBox.DataSource = Nothing
-		Me.GameSetupComboBox.DataBindings.Clear()
+	'	Me.GameSetupComboBox.DataBindings.Clear()
+	'	Me.GameSetupComboBox.DataSource = Nothing
 
-		Me.FreeCrowbarOptions()
-		Me.FreeCompilerOptions()
+	'	Me.FreeCrowbarOptions()
+	'	Me.FreeCompilerOptions()
 
-		Me.CompileComboBox.DataBindings.Clear()
+	'	Me.CompileComboBox.DataBindings.Clear()
 
-		Me.CompiledFilesComboBox.DataBindings.Clear()
-	End Sub
+	'	Me.CompiledFilesComboBox.DataBindings.Clear()
+	'End Sub
 
 	Private Sub FreeCrowbarOptions()
 		Me.GoldSourceEngineLogFileCheckBox.DataBindings.Clear()
@@ -137,16 +143,19 @@ Public Class CompileUserControl
 
 #Region "Widget Event Handlers"
 
-	Private Sub CompileUserControl_Load(sender As Object, e As EventArgs) Handles Me.Load
+	'Private Sub CompileUserControl_Load(sender As Object, e As EventArgs) Handles Me.Load
+	'	If Not Me.DesignMode Then
+	'		Me.Init()
+	'		Me.theControlIsInDesignMode = True
+	'	End If
+	'End Sub
+
+	Private Sub CompileUserControl_Resize(sender As Object, e As EventArgs) Handles Me.Resize
 		'NOTE: This code prevents Visual Studio or Windows often inexplicably extending the right side of these widgets.
 		Workarounds.WorkaroundForFrameworkAnchorRightSizingBug(Me.QcPathFileNameTextBox, Me.BrowseForQcPathFolderOrFileNameButton)
 		Workarounds.WorkaroundForFrameworkAnchorRightSizingBug(Me.OutputPathTextBox, Me.BrowseForOutputPathButton)
 		Workarounds.WorkaroundForFrameworkAnchorRightSizingBug(Me.OutputSubfolderTextBox, Me.BrowseForOutputPathButton)
 		Workarounds.WorkaroundForFrameworkAnchorRightSizingBug(Me.GameModelsOutputPathTextBox, Me.BrowseForOutputPathButton)
-
-		If Not Me.DesignMode Then
-			Me.Init()
-		End If
 	End Sub
 
 #End Region
@@ -335,10 +344,6 @@ Public Class CompileUserControl
 		TheApp.Settings.SetDefaultCompileOptions()
 	End Sub
 
-	Private Sub DirectCompilerOptionsTextBox_TextChanged(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles DirectCompilerOptionsTextBox.TextChanged
-		Me.SetCompilerOptionsText()
-	End Sub
-
 	Private Sub CompileButton_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles CompileButton.Click
 		Me.RunCompiler()
 	End Sub
@@ -402,6 +407,10 @@ Public Class CompileUserControl
 		ElseIf e.PropertyName = "CompileOptionVerboseIsChecked" Then
 			Me.EditCompilerOptionsText("verbose", TheApp.Settings.CompileOptionVerboseIsChecked)
 			Me.SetCompilerOptionsText()
+		ElseIf e.PropertyName = "CompileOptionsDirectText" Then
+			If Not Me.theCompileOptionsDirectTextIsBeingChangedByMe Then
+				Me.SetCompilerOptionsText()
+			End If
 		ElseIf e.PropertyName.StartsWith("Compile") AndAlso e.PropertyName.EndsWith("IsChecked") Then
 			Me.UpdateWidgets(TheApp.Settings.CompilerIsRunning)
 		End If
@@ -767,9 +776,12 @@ Public Class CompileUserControl
 			TheApp.Settings.CompileOptionsText += " "
 			TheApp.Settings.CompileOptionsText += compilerOption
 		Next
-		If Me.DirectCompilerOptionsTextBox.Text.Trim() <> "" Then
+		Me.theCompileOptionsDirectTextIsBeingChangedByMe = True
+		TheApp.Settings.CompileOptionsDirectText = TheApp.Settings.CompileOptionsDirectText.Trim()
+		Me.theCompileOptionsDirectTextIsBeingChangedByMe = False
+		If Me.DirectCompilerOptionsTextBox.Text <> "" Then
 			TheApp.Settings.CompileOptionsText += " "
-			TheApp.Settings.CompileOptionsText += Me.DirectCompilerOptionsTextBox.Text
+			TheApp.Settings.CompileOptionsText += TheApp.Settings.CompileOptionsDirectText
 		End If
 
 		Me.CompilerOptionsTextBox.Text = """"
@@ -805,6 +817,7 @@ Public Class CompileUserControl
 #Region "Data"
 
 	Private theSelectedCompilerOptions As List(Of String)
+	Private theCompileOptionsDirectTextIsBeingChangedByMe As Boolean
 	Private theModelRelativePathFileName As String
 
 	Private theCompiledRelativePathFileNames As BindingListEx(Of String)

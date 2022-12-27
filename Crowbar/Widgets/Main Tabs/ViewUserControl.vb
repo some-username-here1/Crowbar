@@ -10,54 +10,35 @@ Public Class ViewUserControl
 		InitializeComponent()
 	End Sub
 
-	'UserControl overrides dispose to clean up the component list.
-	<System.Diagnostics.DebuggerNonUserCode()>
-	Protected Overrides Sub Dispose(ByVal disposing As Boolean)
-		Try
-			If disposing Then
-				Me.Free()
-				If components IsNot Nothing Then
-					components.Dispose()
-				End If
-			End If
-		Finally
-			MyBase.Dispose(disposing)
-		End Try
-	End Sub
-
 #End Region
 
 #Region "Init and Free"
 
-	Private Sub Init()
+	Protected Overrides Sub Init()
 		Me.theModelViewers = New List(Of Viewer)()
-
-		Dim anEnumList As IList
-		anEnumList = EnumHelper.ToList(GetType(SupportedMdlVersion))
-		Me.OverrideMdlVersionComboBox.DisplayMember = "Value"
-		Me.OverrideMdlVersionComboBox.ValueMember = "Key"
-		Me.OverrideMdlVersionComboBox.DataSource = anEnumList
-		Me.OverrideMdlVersionComboBox.DataBindings.Add("SelectedValue", TheApp.Settings, Me.NameOfAppSettingOverrideMdlVersionName, False, DataSourceUpdateMode.OnPropertyChanged)
 
 		Me.UpdateDataBindings()
 
 		Me.UpdateWidgets(False)
 
 		AddHandler TheApp.Settings.PropertyChanged, AddressOf AppSettings_PropertyChanged
+
+		Me.RunDataViewer()
 	End Sub
 
-	Private Sub Free()
-		RemoveHandler TheApp.Settings.PropertyChanged, AddressOf AppSettings_PropertyChanged
+	' Needed for closing any active child processes. Only called on program exit.
+	Protected Overrides Sub Free()
+		'RemoveHandler TheApp.Settings.PropertyChanged, AddressOf AppSettings_PropertyChanged
 
-		'RemoveHandler Me.MdlPathFileNameTextBox.DataBindings("Text").Parse, AddressOf Me.ParsePathFileName
-		If Me.MdlPathFileNameTextBox.DataBindings("Text") IsNot Nothing Then
-			RemoveHandler Me.MdlPathFileNameTextBox.DataBindings("Text").Parse, AddressOf FileManager.ParsePathFileName
-		End If
-		Me.MdlPathFileNameTextBox.DataBindings.Clear()
+		''RemoveHandler Me.MdlPathFileNameTextBox.DataBindings("Text").Parse, AddressOf Me.ParsePathFileName
+		'If Me.MdlPathFileNameTextBox.DataBindings("Text") IsNot Nothing Then
+		'	RemoveHandler Me.MdlPathFileNameTextBox.DataBindings("Text").Parse, AddressOf FileManager.ParsePathFileName
+		'End If
+		'Me.MdlPathFileNameTextBox.DataBindings.Clear()
 
-		Me.OverrideMdlVersionComboBox.DataBindings.Clear()
+		'Me.OverrideMdlVersionComboBox.DataBindings.Clear()
 
-		Me.FreeDataViewer()
+		'Me.FreeDataViewer()
 		Me.FreeModelViewerWithModel()
 		If Me.theModelViewers IsNot Nothing Then
 			For Each aModelViewer As Viewer In Me.theModelViewers
@@ -105,13 +86,16 @@ Public Class ViewUserControl
 
 #Region "Widget Event Handlers"
 
-	Private Sub UpdateUserControl_Load(sender As Object, e As EventArgs) Handles MyBase.Load
+	'Private Sub ViewUserControl_Load(sender As Object, e As EventArgs) Handles MyBase.Load
+	'	If Not Me.DesignMode Then
+	'		Me.Init()
+	'		Me.theControlIsInDesignMode = True
+	'	End If
+	'End Sub
+
+	Private Sub ViewUserControl_Resize(sender As Object, e As EventArgs) Handles Me.Resize
 		'NOTE: This code prevents Visual Studio or Windows often inexplicably extending the right side of these widgets.
 		Workarounds.WorkaroundForFrameworkAnchorRightSizingBug(Me.MdlPathFileNameTextBox, Me.BrowseForMdlFileButton)
-
-		If Not Me.DesignMode Then
-			Me.Init()
-		End If
 	End Sub
 
 #End Region
@@ -433,10 +417,19 @@ Public Class ViewUserControl
 #Region "Private Methods"
 
 	Private Sub UpdateDataBindings()
+		Dim anEnumList As IList
+		anEnumList = EnumHelper.ToList(GetType(SupportedMdlVersion))
+		Me.OverrideMdlVersionComboBox.DisplayMember = "Value"
+		Me.OverrideMdlVersionComboBox.ValueMember = "Key"
+		Me.OverrideMdlVersionComboBox.DataSource = anEnumList
+		Me.OverrideMdlVersionComboBox.DataBindings.Add("SelectedValue", TheApp.Settings, Me.NameOfAppSettingOverrideMdlVersionName, False, DataSourceUpdateMode.OnPropertyChanged)
+
 		Me.MdlPathFileNameTextBox.DataBindings.Add("Text", TheApp.Settings, Me.NameOfAppSettingMdlPathFileName, False, DataSourceUpdateMode.OnValidation)
 		'AddHandler Me.MdlPathFileNameTextBox.DataBindings("Text").Parse, AddressOf Me.ParsePathFileName
 		AddHandler Me.MdlPathFileNameTextBox.DataBindings("Text").Parse, AddressOf FileManager.ParsePathFileName
 
+		'NOTE: Prevent changing this combobox's SelectedIndex when another combobox's (which also accesses "SelectedIndex" and TheApp.Settings) SelectedIndex changes.
+		Me.GameSetupComboBox.BindingContext = New BindingContext()
 		'NOTE: The DataSource, DisplayMember, and ValueMember need to be set before DataBindings, or else an exception is raised.
 		Me.GameSetupComboBox.DisplayMember = "GameName"
 		Me.GameSetupComboBox.ValueMember = "GameName"

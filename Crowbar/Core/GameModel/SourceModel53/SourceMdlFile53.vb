@@ -108,6 +108,11 @@ Public Class SourceMdlFile53
 		' Offsets: 0xAC (172), 0xB0
 		Me.theMdlFileData.hitboxSetCount = Me.theInputFileReader.ReadInt32()
 		Me.theMdlFileData.hitboxSetOffset = Me.theInputFileReader.ReadInt32()
+		'FROM: StudioMdl for MDL48 and MDL49
+		'#define MAXSTUDIOHITBOXSETNAME 64
+		If Me.theMdlFileData.hitboxSetCount > 64 Then
+			Me.theMdlFileData.hitboxSetCount = 64
+		End If
 
 		' Offsets: 0xB4 (180), 0xB8
 		Me.theMdlFileData.localAnimationCount = Me.theInputFileReader.ReadInt32()
@@ -145,8 +150,13 @@ Public Class SourceMdlFile53
 		' Offsets: 0xF8, 0xFC, 0x0100
 		Me.theMdlFileData.localNodeCount = Me.theInputFileReader.ReadInt32()
 		Me.theMdlFileData.localNodeOffset = Me.theInputFileReader.ReadInt32()
-
 		Me.theMdlFileData.localNodeNameOffset = Me.theInputFileReader.ReadInt32()
+		'FROM: StudioMdl for MDL48 and MDL49
+		'EXTERN char *g_xnodename[100];
+		'EXTERN Int g_xnode[100][100];
+		If Me.theMdlFileData.localNodeCount > 100 Then
+			Me.theMdlFileData.localNodeCount = 100
+		End If
 
 		' Offsets: 0x0104 (), 0x0108 ()
 		Me.theMdlFileData.flexDescCount = Me.theInputFileReader.ReadInt32()
@@ -499,7 +509,7 @@ Public Class SourceMdlFile53
 
 			fileOffsetEnd = Me.theInputFileReader.BaseStream.Position - 1
 			Me.theMdlFileData.theFileSeekLog.Add(fileOffsetStart, fileOffsetEnd, "aBone.theAxisInterpBone")
-		Catch
+		Catch ex As Exception
 		End Try
 	End Sub
 
@@ -529,7 +539,7 @@ Public Class SourceMdlFile53
 
 			fileOffsetEnd = Me.theInputFileReader.BaseStream.Position - 1
 			Me.theMdlFileData.theFileSeekLog.Add(fileOffsetStart, fileOffsetEnd, "aBone.theQuatInterpBone")
-		Catch
+		Catch ex As Exception
 		End Try
 	End Sub
 
@@ -569,7 +579,7 @@ Public Class SourceMdlFile53
 
 			fileOffsetEnd = Me.theInputFileReader.BaseStream.Position - 1
 			Me.theMdlFileData.theFileSeekLog.Add(fileOffsetStart, fileOffsetEnd, "aQuatInterpBone.theTriggers " + aQuatInterpBone.theTriggers.Count.ToString())
-		Catch
+		Catch ex As Exception
 		End Try
 	End Sub
 
@@ -776,36 +786,43 @@ Public Class SourceMdlFile53
 			fileOffsetStart = Me.theInputFileReader.BaseStream.Position
 
 			Me.theMdlFileData.theHitboxSets = New List(Of SourceMdlHitboxSet)(Me.theMdlFileData.hitboxSetCount)
-			For i As Integer = 0 To Me.theMdlFileData.hitboxSetCount - 1
-				hitboxSetInputFileStreamPosition = Me.theInputFileReader.BaseStream.Position
-				Dim aHitboxSet As New SourceMdlHitboxSet()
-				aHitboxSet.nameOffset = Me.theInputFileReader.ReadInt32()
-				aHitboxSet.hitboxCount = Me.theInputFileReader.ReadInt32()
-				aHitboxSet.hitboxOffset = Me.theInputFileReader.ReadInt32()
-				Me.theMdlFileData.theHitboxSets.Add(aHitboxSet)
+			Try
+				For i As Integer = 0 To Me.theMdlFileData.hitboxSetCount - 1
+					hitboxSetInputFileStreamPosition = Me.theInputFileReader.BaseStream.Position
+					Dim aHitboxSet As New SourceMdlHitboxSet()
+					aHitboxSet.nameOffset = Me.theInputFileReader.ReadInt32()
+					aHitboxSet.hitboxCount = Me.theInputFileReader.ReadInt32()
+					aHitboxSet.hitboxOffset = Me.theInputFileReader.ReadInt32()
+					Me.theMdlFileData.theHitboxSets.Add(aHitboxSet)
 
-				inputFileStreamPosition = Me.theInputFileReader.BaseStream.Position
+					inputFileStreamPosition = Me.theInputFileReader.BaseStream.Position
 
-				'If aHitboxSet.nameOffset <> 0 Then
-				'	Me.theInputFileReader.BaseStream.Seek(hitboxSetInputFileStreamPosition + aHitboxSet.nameOffset, SeekOrigin.Begin)
-				'	fileOffsetStart2 = Me.theInputFileReader.BaseStream.Position
+					'If aHitboxSet.nameOffset > 0 Then
+					'	Me.theInputFileReader.BaseStream.Seek(hitboxSetInputFileStreamPosition + aHitboxSet.nameOffset, SeekOrigin.Begin)
+					'	fileOffsetStart2 = Me.theInputFileReader.BaseStream.Position
 
-				'	aHitboxSet.theName = FileManager.ReadNullTerminatedString(Me.theInputFileReader)
+					'	aHitboxSet.theName = FileManager.ReadNullTerminatedString(Me.theInputFileReader)
 
-				'	fileOffsetEnd2 = Me.theInputFileReader.BaseStream.Position - 1
-				'	If Not Me.theMdlFileData.theFileSeekLog.ContainsKey(fileOffsetStart2) Then
-				'		Me.theMdlFileData.theFileSeekLog.Add(fileOffsetStart2, fileOffsetEnd2, "aHitboxSet.theName")
-				'	End If
-				'Else
-				'	aHitboxSet.theName = ""
-				'End If
-				'------
-				aHitboxSet.theName = Me.GetStringAtOffset(hitboxSetInputFileStreamPosition, aHitboxSet.nameOffset, "aHitboxSet.theName")
+					'	fileOffsetEnd2 = Me.theInputFileReader.BaseStream.Position - 1
+					'	If Not Me.theMdlFileData.theFileSeekLog.ContainsKey(fileOffsetStart2) Then
+					'		Me.theMdlFileData.theFileSeekLog.Add(fileOffsetStart2, fileOffsetEnd2, "aHitboxSet.theName")
+					'	End If
+					'Else
+					'	aHitboxSet.theName = ""
+					'End If
+					'------
+					aHitboxSet.theName = Me.GetStringAtOffset(hitboxSetInputFileStreamPosition, aHitboxSet.nameOffset, "aHitboxSet.theName")
 
-				Me.ReadHitboxes(hitboxSetInputFileStreamPosition + aHitboxSet.hitboxOffset, aHitboxSet)
+					Me.ReadHitboxes(hitboxSetInputFileStreamPosition + aHitboxSet.hitboxOffset, aHitboxSet)
 
-				Me.theInputFileReader.BaseStream.Seek(inputFileStreamPosition, SeekOrigin.Begin)
-			Next
+					Me.theInputFileReader.BaseStream.Seek(inputFileStreamPosition, SeekOrigin.Begin)
+				Next
+			Catch ex As Exception
+				Dim lastHitBoxSet As SourceMdlHitboxSet = Me.theMdlFileData.theHitboxSets(Me.theMdlFileData.theHitboxSets.Count - 1)
+				If lastHitBoxSet.theName = "" AndAlso lastHitBoxSet.theHitboxes IsNot Nothing AndAlso lastHitBoxSet.theHitboxes.Count = 0 Then
+					Me.theMdlFileData.theHitboxSets.Remove(lastHitBoxSet)
+				End If
+			End Try
 
 			fileOffsetEnd = Me.theInputFileReader.BaseStream.Position - 1
 			Me.theMdlFileData.theFileSeekLog.Add(fileOffsetStart, fileOffsetEnd, "theMdlFileData.theHitboxSets " + Me.theMdlFileData.theHitboxSets.Count.ToString())
@@ -2541,7 +2558,7 @@ Public Class SourceMdlFile53
 		'		// printf("%d : %s\n", i, g_xnodename[i+1] );
 		'		pxnodename++;
 		'	}
-		If Me.theMdlFileData.localNodeCount > 0 AndAlso Me.theMdlFileData.localNodeNameOffset <> 0 Then
+		If Me.theMdlFileData.localNodeCount > 0 AndAlso Me.theMdlFileData.localNodeNameOffset > 0 Then
 			Dim localNodeNameInputFileStreamPosition As Long
 			Dim inputFileStreamPosition As Long
 			Dim fileOffsetStart As Long
@@ -2553,31 +2570,38 @@ Public Class SourceMdlFile53
 			fileOffsetStart = Me.theInputFileReader.BaseStream.Position
 
 			Me.theMdlFileData.theLocalNodeNames = New List(Of String)(Me.theMdlFileData.localNodeCount)
-			Dim localNodeNameOffset As Integer
-			For i As Integer = 0 To Me.theMdlFileData.localNodeCount - 1
-				localNodeNameInputFileStreamPosition = Me.theInputFileReader.BaseStream.Position
-				Dim aLocalNodeName As String
-				localNodeNameOffset = Me.theInputFileReader.ReadInt32()
+			Try
+				Dim localNodeNameOffset As Integer
+				For i As Integer = 0 To Me.theMdlFileData.localNodeCount - 1
+					localNodeNameInputFileStreamPosition = Me.theInputFileReader.BaseStream.Position
+					Dim aLocalNodeName As String
+					localNodeNameOffset = Me.theInputFileReader.ReadInt32()
 
-				inputFileStreamPosition = Me.theInputFileReader.BaseStream.Position
+					inputFileStreamPosition = Me.theInputFileReader.BaseStream.Position
 
-				If localNodeNameOffset <> 0 Then
-					Me.theInputFileReader.BaseStream.Seek(localNodeNameOffset, SeekOrigin.Begin)
-					fileOffsetStart2 = Me.theInputFileReader.BaseStream.Position
+					If localNodeNameOffset <> 0 Then
+						Me.theInputFileReader.BaseStream.Seek(localNodeNameOffset, SeekOrigin.Begin)
+						fileOffsetStart2 = Me.theInputFileReader.BaseStream.Position
 
-					aLocalNodeName = FileManager.ReadNullTerminatedString(Me.theInputFileReader)
+						aLocalNodeName = FileManager.ReadNullTerminatedString(Me.theInputFileReader)
 
-					fileOffsetEnd2 = Me.theInputFileReader.BaseStream.Position - 1
-					If Not Me.theMdlFileData.theFileSeekLog.ContainsKey(fileOffsetStart2) Then
-						Me.theMdlFileData.theFileSeekLog.Add(fileOffsetStart2, fileOffsetEnd2, "aLocalNodeName = " + aLocalNodeName)
+						fileOffsetEnd2 = Me.theInputFileReader.BaseStream.Position - 1
+						If Not Me.theMdlFileData.theFileSeekLog.ContainsKey(fileOffsetStart2) Then
+							Me.theMdlFileData.theFileSeekLog.Add(fileOffsetStart2, fileOffsetEnd2, "aLocalNodeName = " + aLocalNodeName)
+						End If
+					Else
+						aLocalNodeName = ""
 					End If
-				Else
-					aLocalNodeName = ""
-				End If
-				Me.theMdlFileData.theLocalNodeNames.Add(aLocalNodeName)
+					Me.theMdlFileData.theLocalNodeNames.Add(aLocalNodeName)
 
-				Me.theInputFileReader.BaseStream.Seek(inputFileStreamPosition, SeekOrigin.Begin)
-			Next
+					Me.theInputFileReader.BaseStream.Seek(inputFileStreamPosition, SeekOrigin.Begin)
+				Next
+			Catch ex As Exception
+				Dim lastLocalNodeName As String = Me.theMdlFileData.theLocalNodeNames(Me.theMdlFileData.theLocalNodeNames.Count - 1)
+				If lastLocalNodeName = "" Then
+					Me.theMdlFileData.theLocalNodeNames.Remove(lastLocalNodeName)
+				End If
+			End Try
 
 			fileOffsetEnd = Me.theInputFileReader.BaseStream.Position - 1
 			Me.theMdlFileData.theFileSeekLog.Add(fileOffsetStart, fileOffsetEnd, "theMdlFileData.theLocalNodeNames " + Me.theMdlFileData.theLocalNodeNames.Count.ToString())
@@ -4111,7 +4135,7 @@ Public Class SourceMdlFile53
 	'				offsetStart = -1
 	'			End If
 	'		Next
-	'	Catch
+	'	Catch ex As Exception
 
 	'	End Try
 	'End Sub

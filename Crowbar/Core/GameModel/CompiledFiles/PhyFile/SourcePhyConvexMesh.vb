@@ -1,4 +1,6 @@
-Public Class SourcePhyFaceSection
+Public Class SourcePhyConvexMesh
+
+	Public flags As Integer
 
 	Public theBoneIndex As Integer
 	Public theFaces As New List(Of SourcePhyFace)()

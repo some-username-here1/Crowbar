@@ -1,4 +1,5 @@
 Imports System.IO
+Imports System.Linq
 Imports System.Runtime.InteropServices
 Imports System.Text
 Imports System.Xml.Serialization
@@ -6,29 +7,6 @@ Imports System.Xml.Serialization
 Public Class FileManager
 
 #Region "Read Methods"
-
-	Public Shared Function FilePathHasInvalidChars(ByVal path As String) As Boolean
-		Dim ret As Boolean = False
-
-		If String.IsNullOrEmpty(path) Then
-			ret = True
-		Else
-			Try
-				Dim fileName As String = System.IO.Path.GetFileName(path)
-				Dim fileDirectory As String = System.IO.Path.GetDirectoryName(path)
-			Catch generatedExceptionName As ArgumentException
-				' Path functions will throw this 
-				' if path contains invalid chars
-				ret = True
-			End Try
-			ret = (path.IndexOfAny(System.IO.Path.GetInvalidPathChars()) >= 0)
-			If ret = False Then
-				ret = (path.IndexOfAny(System.IO.Path.GetInvalidFileNameChars()) >= 0)
-			End If
-		End If
-
-		Return ret
-	End Function
 
 	Public Shared Function ReadNullTerminatedString(ByVal inputFileReader As BinaryReader) As String
 		Dim text As New StringBuilder()
@@ -38,6 +16,20 @@ Public Class FileManager
 		End While
 		' Read the null character.
 		inputFileReader.ReadChar()
+		Return text.ToString()
+	End Function
+
+	Public Shared Function ReadNullTerminatedString(ByVal inputFileReader As BufferedBinaryReader) As String
+		Dim text As New StringBuilder()
+		text.Length = 0
+		Dim aCharacter As Char
+		While True
+			aCharacter = inputFileReader.ReadChar()
+			If aCharacter = ControlChars.NullChar Then
+				Exit While
+			End If
+			text.Append(aCharacter)
+		End While
 		Return text.ToString()
 	End Function
 
@@ -297,6 +289,29 @@ Public Class FileManager
 
 #Region "Path"
 
+	Public Shared Function FilePathHasInvalidChars(ByVal path As String) As Boolean
+		Dim ret As Boolean = False
+
+		If String.IsNullOrEmpty(path) Then
+			ret = True
+		Else
+			Try
+				Dim fileName As String = System.IO.Path.GetFileName(path)
+				Dim fileDirectory As String = System.IO.Path.GetDirectoryName(path)
+			Catch generatedExceptionName As ArgumentException
+				' Path functions will throw this 
+				' if path contains invalid chars
+				ret = True
+			End Try
+			ret = (path.IndexOfAny(System.IO.Path.GetInvalidPathChars()) >= 0)
+			If ret = False Then
+				ret = (path.IndexOfAny(System.IO.Path.GetInvalidFileNameChars()) >= 0)
+			End If
+		End If
+
+		Return ret
+	End Function
+
 	Public Shared Function GetPathFileNameWithoutExtension(ByVal pathFileName As String) As String
 		Try
 			Return Path.Combine(FileManager.GetPath(pathFileName), Path.GetFileNameWithoutExtension(pathFileName))
@@ -368,7 +383,11 @@ Public Class FileManager
 		End If
 
 		fromPathAbsolute = Path.GetFullPath(fromPath)
+		fromPathAbsolute = fromPathAbsolute.TrimEnd(Path.DirectorySeparatorChar)
+		fromPathAbsolute = fromPathAbsolute.TrimEnd(Path.AltDirectorySeparatorChar)
 		toPathAbsolute = Path.GetFullPath(toPath)
+		toPathAbsolute = toPathAbsolute.TrimEnd(Path.DirectorySeparatorChar)
+		toPathAbsolute = toPathAbsolute.TrimEnd(Path.AltDirectorySeparatorChar)
 
 		'Dim fromAttr As Integer = GetPathAttribute(fromPathAbsolute)
 		'Dim toAttr As Integer = GetPathAttribute(toPathAbsolute)
@@ -393,7 +412,7 @@ Public Class FileManager
 		' Convert Uri escaped characters and convert Uri forward slash to default directory separator.
 		Dim newPathFileName As String = Uri.UnescapeDataString(diff.OriginalString).Replace("/", Path.DirectorySeparatorChar)
 
-        Dim cleanedPath As String
+		Dim cleanedPath As String
 		cleanedPath = newPathFileName.ToString()
 		If cleanedPath.StartsWith("." + Path.DirectorySeparatorChar) Then
 			cleanedPath = cleanedPath.Remove(0, 2)
@@ -417,42 +436,48 @@ Public Class FileManager
 			End Try
 		End If
 
+		cleanPath = cleanPath.TrimEnd(Path.DirectorySeparatorChar)
+		cleanPath = cleanPath.TrimEnd(Path.AltDirectorySeparatorChar)
+
 		Return cleanPath
 	End Function
 
 	Public Shared Function GetCleanPathFileName(ByVal givenPathFileName As String, ByVal returnFullPathFileName As Boolean) As String
-        Dim cleanPathFileName As String
+		Dim cleanPathFileName As String
 
-        Dim cleanedPathGivenPathFileName As String
-        cleanedPathGivenPathFileName = givenPathFileName
-        For Each invalidChar As Char In Path.GetInvalidPathChars()
-            cleanedPathGivenPathFileName = cleanedPathGivenPathFileName.Replace(invalidChar, "")
-        Next
-        If returnFullPathFileName Then
-            Try
-                cleanedPathGivenPathFileName = Path.GetFullPath(cleanedPathGivenPathFileName)
-            Catch ex As Exception
-                cleanedPathGivenPathFileName = cleanedPathGivenPathFileName.Replace(":", "")
-            End Try
-        End If
+		Dim cleanedPathGivenPathFileName As String
+		cleanedPathGivenPathFileName = givenPathFileName
+		For Each invalidChar As Char In Path.GetInvalidPathChars()
+			cleanedPathGivenPathFileName = cleanedPathGivenPathFileName.Replace(invalidChar, "")
+		Next
+		If returnFullPathFileName Then
+			Try
+				cleanedPathGivenPathFileName = Path.GetFullPath(cleanedPathGivenPathFileName)
+			Catch ex As Exception
+				cleanedPathGivenPathFileName = cleanedPathGivenPathFileName.Replace(":", "")
+			End Try
+		End If
 
-        Dim cleanedGivenFileName As String
-        cleanedGivenFileName = Path.GetFileName(cleanedPathGivenPathFileName)
-        For Each invalidChar As Char In Path.GetInvalidFileNameChars()
-            cleanedGivenFileName = cleanedGivenFileName.Replace(invalidChar, "")
-        Next
+		Dim cleanedGivenFileName As String
+		cleanedGivenFileName = Path.GetFileName(cleanedPathGivenPathFileName)
+		For Each invalidChar As Char In Path.GetInvalidFileNameChars()
+			cleanedGivenFileName = cleanedGivenFileName.Replace(invalidChar, "")
+		Next
 
-        Dim cleanedGivenPath As String
-        cleanedGivenPath = FileManager.GetPath(cleanedPathGivenPathFileName)
+		Dim cleanedGivenPath As String
+		cleanedGivenPath = FileManager.GetPath(cleanedPathGivenPathFileName)
 
-        If cleanedGivenFileName = "" Then
-            cleanPathFileName = cleanedPathGivenPathFileName
-        Else
-            cleanPathFileName = Path.Combine(cleanedGivenPath, cleanedGivenFileName)
-        End If
+		If cleanedGivenFileName = "" Then
+			cleanPathFileName = cleanedPathGivenPathFileName
+		Else
+			cleanPathFileName = Path.Combine(cleanedGivenPath, cleanedGivenFileName)
+		End If
 
-        Return cleanPathFileName
-    End Function
+		cleanPathFileName = cleanPathFileName.TrimEnd(Path.DirectorySeparatorChar)
+		cleanPathFileName = cleanPathFileName.TrimEnd(Path.AltDirectorySeparatorChar)
+
+		Return cleanPathFileName
+	End Function
 
 	Public Shared Sub ParsePath(ByVal sender As Object, ByVal e As ConvertEventArgs)
 		If e.DesiredType IsNot GetType(String) Then
@@ -468,8 +493,8 @@ Public Class FileManager
 			Exit Sub
 		End If
 		If CStr(e.Value) <> "" Then
-            e.Value = FileManager.GetCleanPathFileName(CStr(e.Value), True)
-        End If
+			e.Value = FileManager.GetCleanPathFileName(CStr(e.Value), True)
+		End If
 	End Sub
 
 	Public Shared Function GetNormalizedPathFileName(ByVal givenPathFileName As String) As String
@@ -594,7 +619,7 @@ Public Class FileManager
 	Private Const FILE_ATTRIBUTE_DIRECTORY As Integer = &H10
 	Private Const FILE_ATTRIBUTE_NORMAL As Integer = &H80
 
-	<DllImport("shlwapi.dll", SetLastError:=True)> _
+	<DllImport("shlwapi.dll", SetLastError:=True)>
 	Private Shared Function PathRelativePathTo(ByVal pszPath As StringBuilder, ByVal pszFrom As String, ByVal dwAttrFrom As Integer, ByVal pszTo As String, ByVal dwAttrTo As Integer) As Integer
 	End Function
 
@@ -623,14 +648,41 @@ Public Class FileManager
 
 	Public Shared Function GetFolderSize(ByVal aFolder As String) As ULong
 		Dim size As ULong
-		Dim FolderInfo As DirectoryInfo = New IO.DirectoryInfo(aFolder)
-		For Each File As FileInfo In FolderInfo.GetFiles
-			size += CULng(File.Length)
-		Next
-		For Each SubFolderInfo As DirectoryInfo In FolderInfo.GetDirectories
-			size += GetFolderSize(SubFolderInfo.FullName)
-		Next
+		Dim aFolderInfo As DirectoryInfo = New IO.DirectoryInfo(aFolder)
+		Try
+			For Each aFileInfo As FileInfo In aFolderInfo.GetFiles
+				size += CULng(aFileInfo.Length)
+			Next
+			For Each aSubFolderInfo As DirectoryInfo In aFolderInfo.GetDirectories
+				size += GetFolderSize(aSubFolderInfo.FullName)
+			Next
+		Catch ex As Exception
+			size = 0
+		End Try
 		Return size
+	End Function
+
+	'FROM: Microsoft document about Directory.GetFiles Method
+	'      https://docs.microsoft.com/en-us/dotnet/api/system.io.directory.getfiles?view=netframework-4.0
+	' If the specified extension is exactly three characters long, the method returns files with extensions that begin with the specified extension. 
+	'     For example, "*.xls" returns both "book.xls" and "book.xlsx".
+	Public Shared Function GetFolderFiles(ByVal givenPathFileName As String, ByVal pattern As String) As List(Of String)
+		Dim pathFileNames As List(Of String)
+		Dim pathFileNamesEnumerable As IEnumerable(Of String)
+
+		If pattern(0) = "*" AndAlso pattern(1) = "." AndAlso pattern.Length = 5 Then
+			Dim patternExtension As String = pattern.Substring(1)
+			pathFileNamesEnumerable = Directory.GetFiles(givenPathFileName, pattern).Where(Function(f) Path.GetExtension(f).ToLowerInvariant() = patternExtension)
+		Else
+			pathFileNamesEnumerable = Directory.GetFiles(givenPathFileName, pattern)
+		End If
+
+		If pathFileNamesEnumerable IsNot Nothing Then
+			pathFileNames = pathFileNamesEnumerable.ToList()
+		Else
+			pathFileNames = New List(Of String)()
+		End If
+		Return pathFileNames
 	End Function
 
 #End Region
@@ -649,7 +701,7 @@ Public Class FileManager
 		'Dim iObject As Object = Nothing
 		'Try
 		'	iObject = x.Deserialize(objStreamReader)
-		'Catch
+		'Catch ex As Exception
 		'	'TODO: Rename the corrupted file.
 		'	Throw
 		'Finally
@@ -667,7 +719,7 @@ Public Class FileManager
 
 		Try
 			iObject = x.Deserialize(objStreamReader)
-		Catch
+		Catch ex As Exception
 			thereWasReadError = True
 			Throw
 		Finally

@@ -41,11 +41,11 @@ Public Class AppSettings
 		Me.theUnpackOutputFolderOption = UnpackOutputPathOptions.SameFolder
 		Me.SetDefaultUnpackOutputSubfolderName()
 		Me.theUnpackOutputFullPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
+		Me.theUnpackByteUnitsOption = ByteUnitsOption.Bytes
 		Me.theUnpackGameSetupSelectedIndex = 0
-		Me.theUnpackSearchField = UnpackSearchFieldOptions.Files
 		Me.theUnpackSearchText = ""
 		Me.SetDefaultUnpackOptions()
-		Me.theUnpackMode = InputOptions.File
+		Me.theUnpackModeIndex = 0
 
 		Me.thePreviewMdlPathFileName = ""
 		Me.thePreviewOverrideMdlVersion = SupportedMdlVersion.DoNotOverride
@@ -216,7 +216,7 @@ Public Class AppSettings
 		Get
 			'NOTE: Must change in the Get() because theGameSetups might not have been read-in yet (i.e. GameSetups appear *after* this setting in XML file).
 			If Me.theSetUpGamesGameSetupSelectedIndex >= Me.theGameSetups.Count Then
-				Me.theSetUpGamesGameSetupSelectedIndex = TheApp.Settings.GameSetups.Count - 1
+				Me.theSetUpGamesGameSetupSelectedIndex = Me.theGameSetups.Count - 1
 			End If
 			Return Me.theSetUpGamesGameSetupSelectedIndex
 		End Get
@@ -372,29 +372,27 @@ Public Class AppSettings
 		End Set
 	End Property
 
+	Public Property UnpackByteUnitsOption() As ByteUnitsOption
+		Get
+			Return Me.theUnpackByteUnitsOption
+		End Get
+		Set(ByVal value As ByteUnitsOption)
+			Me.theUnpackByteUnitsOption = value
+			NotifyPropertyChanged("UnpackByteUnitsOption")
+		End Set
+	End Property
+
 	Public Property UnpackGameSetupSelectedIndex() As Integer
 		Get
 			'NOTE: Must change in the Get() because theGameSetups might not have been read-in yet (i.e. GameSetups appear *after* this setting in XML file).
 			If Me.theUnpackGameSetupSelectedIndex >= Me.theGameSetups.Count Then
-				Me.theUnpackGameSetupSelectedIndex = TheApp.Settings.GameSetups.Count - 1
+				Me.theUnpackGameSetupSelectedIndex = Me.theGameSetups.Count - 1
 			End If
 			Return Me.theUnpackGameSetupSelectedIndex
 		End Get
 		Set(ByVal value As Integer)
 			Me.theUnpackGameSetupSelectedIndex = value
 			NotifyPropertyChanged("UnpackGameSetupSelectedIndex")
-		End Set
-	End Property
-
-	Public Property UnpackSearchField() As UnpackSearchFieldOptions
-		Get
-			Return Me.theUnpackSearchField
-		End Get
-		Set(ByVal value As UnpackSearchFieldOptions)
-			If Me.theUnpackSearchField <> value Then
-				Me.theUnpackSearchField = value
-				NotifyPropertyChanged("UnpackSearchField")
-			End If
 		End Set
 	End Property
 
@@ -440,14 +438,14 @@ Public Class AppSettings
 		End Set
 	End Property
 
-	Public Property UnpackMode() As InputOptions
+	Public Property UnpackModeIndex() As Integer
 		Get
-			Return Me.theUnpackMode
+			Return Me.theUnpackModeIndex
 		End Get
-		Set(ByVal value As InputOptions)
-			If Me.theUnpackMode <> value Then
-				Me.theUnpackMode = value
-				NotifyPropertyChanged("UnpackMode")
+		Set(ByVal value As Integer)
+			If Me.theUnpackModeIndex <> value Then
+				Me.theUnpackModeIndex = value
+				NotifyPropertyChanged("UnpackModeIndex")
 			End If
 		End Set
 	End Property
@@ -487,7 +485,7 @@ Public Class AppSettings
 		Get
 			'NOTE: Must change in the Get() because theGameSetups might not have been read-in yet (i.e. GameSetups appear *after* this setting in XML file).
 			If Me.thePreviewGameSetupSelectedIndex >= Me.theGameSetups.Count Then
-				Me.thePreviewGameSetupSelectedIndex = TheApp.Settings.GameSetups.Count - 1
+				Me.thePreviewGameSetupSelectedIndex = Me.theGameSetups.Count - 1
 			End If
 			Return Me.thePreviewGameSetupSelectedIndex
 		End Get
@@ -894,7 +892,7 @@ Public Class AppSettings
 		Get
 			'NOTE: Must change in the Get() because theGameSetups might not have been read-in yet (i.e. GameSetups appear *after* this setting in XML file).
 			If Me.theCompileGameSetupSelectedIndex >= Me.theGameSetups.Count Then
-				Me.theCompileGameSetupSelectedIndex = TheApp.Settings.GameSetups.Count - 1
+				Me.theCompileGameSetupSelectedIndex = Me.theGameSetups.Count - 1
 			End If
 			Return Me.theCompileGameSetupSelectedIndex
 		End Get
@@ -994,6 +992,16 @@ Public Class AppSettings
 		End Set
 	End Property
 
+	Public Property CompileOptionsDirectText() As String
+		Get
+			Return Me.theCompileOptionsDirectText
+		End Get
+		Set(ByVal value As String)
+			Me.theCompileOptionsDirectText = value
+			NotifyPropertyChanged("CompileOptionsDirectText")
+		End Set
+	End Property
+
 	<XmlIgnore()>
 	Public Property CompileOptionsText() As String
 		Get
@@ -1070,7 +1078,7 @@ Public Class AppSettings
 		Get
 			'NOTE: Must change in the Get() because theGameSetups might not have been read-in yet (i.e. GameSetups appear *after* this setting in XML file).
 			If Me.theViewGameSetupSelectedIndex >= Me.theGameSetups.Count Then
-				Me.theViewGameSetupSelectedIndex = TheApp.Settings.GameSetups.Count - 1
+				Me.theViewGameSetupSelectedIndex = Me.theGameSetups.Count - 1
 			End If
 			Return Me.theViewGameSetupSelectedIndex
 		End Get
@@ -1156,7 +1164,7 @@ Public Class AppSettings
 		Get
 			'NOTE: Must change in the Get() because theGameSetups might not have been read-in yet (i.e. GameSetups appear *after* this setting in XML file).
 			If Me.thePackGameSetupSelectedIndex >= Me.theGameSetups.Count Then
-				Me.thePackGameSetupSelectedIndex = TheApp.Settings.GameSetups.Count - 1
+				Me.thePackGameSetupSelectedIndex = Me.theGameSetups.Count - 1
 			End If
 			Return Me.thePackGameSetupSelectedIndex
 		End Get
@@ -1183,6 +1191,16 @@ Public Class AppSettings
 		Set(ByVal value As Boolean)
 			Me.thePackOptionMultiFileVpkIsChecked = value
 			NotifyPropertyChanged("PackOptionMultiFileVpkIsChecked")
+		End Set
+	End Property
+
+	Public Property PackOptionIgnoreWhitelistWarningsIsChecked() As Boolean
+		Get
+			Return Me.thePackOptionIgnoreWhitelistWarningsIsChecked
+		End Get
+		Set(ByVal value As Boolean)
+			Me.thePackOptionIgnoreWhitelistWarningsIsChecked = value
+			NotifyPropertyChanged("PackOptionIgnoreWhitelistWarningsIsChecked")
 		End Set
 	End Property
 
@@ -1725,6 +1743,7 @@ Public Class AppSettings
 		Me.CompileOptionDefineBonesOverwriteQciFileIsChecked = False
 		Me.CompileOptionDefineBonesModifyQcFileIsChecked = False
 
+		Me.CompileOptionsDirectText = ""
 		Me.CompileOptionsText = ""
 	End Sub
 
@@ -1733,6 +1752,7 @@ Public Class AppSettings
 		Me.PackLogFileIsChecked = False
 
 		Me.PackOptionMultiFileVpkIsChecked = False
+		Me.PackOptionIgnoreWhitelistWarningsIsChecked = False
 
 		Me.PackGmaTitle = ""
 		Me.PackGmaItemTags = New BindingListEx(Of String)()
@@ -1843,16 +1863,16 @@ Public Class AppSettings
 	Private theUnpackOutputSamePath As String
 	Private theUnpackOutputSubfolderName As String
 	Private theUnpackOutputFullPath As String
+	Private theUnpackByteUnitsOption As ByteUnitsOption
 	Private theUnpackPackagePathFileName As String
 	Private theUnpackGameSetupSelectedIndex As Integer
-	Private theUnpackSearchField As UnpackSearchFieldOptions
 	Private theUnpackSearchText As String
 
 	Private theUnpackFolderForEachPackageIsChecked As Boolean
 	Private theUnpackKeepFullPathIsChecked As Boolean
 	Private theUnpackLogFileIsChecked As Boolean
 
-	Private theUnpackMode As InputOptions
+	Private theUnpackModeIndex As Integer
 	Private theUnpackerIsRunning As Boolean
 
 	' Preview tab
@@ -1932,6 +1952,7 @@ Public Class AppSettings
 	Private theCompileOptionNoP4IsChecked As Boolean
 	Private theCompileOptionVerboseIsChecked As Boolean
 
+	Private theCompileOptionsDirectText As String
 	Private theCompileOptionsText As String
 
 	Private theCompilerIsRunning As Boolean
@@ -1963,6 +1984,7 @@ Public Class AppSettings
 
 	Private thePackLogFileIsChecked As Boolean
 	Private thePackOptionMultiFileVpkIsChecked As Boolean
+	Private thePackOptionIgnoreWhitelistWarningsIsChecked As Boolean
 
 	Private thePackGmaTitle As String
 	Private thePackGmaItemTags As BindingListEx(Of String)

@@ -831,12 +831,24 @@ Public Class SourceQcFile49
 
 		If Me.theMdlFileData.theFlexControllers IsNot Nothing AndAlso Me.theMdlFileData.theFlexControllers.Count > 0 Then
 			Dim aFlexController As SourceMdlFlexController
+			Dim flexControllerNames As New List(Of String)()
+			Dim commentOperatorText As String
 
 			line = ""
 			Me.theOutputFileStreamWriter.WriteLine(line)
 
 			For i As Integer = 0 To Me.theMdlFileData.theFlexControllers.Count - 1
 				aFlexController = Me.theMdlFileData.theFlexControllers(i)
+
+				If flexControllerNames.Contains(aFlexController.theName) Then
+					line = vbTab
+					line += "// Although in the original model, the line below is a duplicate of a line above and is commented-out to avoid problems in Source Filmmaker (and possibly other tools)."
+					Me.theOutputFileStreamWriter.WriteLine(line)
+					commentOperatorText = "//"
+				Else
+					flexControllerNames.Add(aFlexController.theName)
+					commentOperatorText = ""
+				End If
 
 				If aFlexController.theType = "eyes" AndAlso (aFlexController.theName = "eyes_updown" OrElse aFlexController.theName = "eyes_rightleft") Then
 					If Not Me.theBodyPartForFlexWriting.theEyeballOptionIsUsed Then
@@ -845,6 +857,7 @@ Public Class SourceQcFile49
 				End If
 
 				line = vbTab
+				line += commentOperatorText
 				line += "flexcontroller "
 				line += aFlexController.theType
 				line += " "
@@ -2484,8 +2497,20 @@ Public Class SourceQcFile49
 		If aSequenceDesc.theActivityModifiers IsNot Nothing Then
 			For Each activityModifier As SourceMdlActivityModifier In aSequenceDesc.theActivityModifiers
 				line = vbTab
-				line += "activitymodifier "
+				line += "activitymodifier """
 				line += activityModifier.theName
+				line += """"
+				Me.theOutputFileStreamWriter.WriteLine(line)
+			Next
+		End If
+
+		If aSequenceDesc.theAnimTags IsNot Nothing Then
+			For Each animTag As SourceMdlAnimTag In aSequenceDesc.theAnimTags
+				line = vbTab
+				line += "animtag """
+				line += animTag.theName
+				line += """ "
+				line += animTag.cycle.ToString(TheApp.InternalNumberFormat)
 				Me.theOutputFileStreamWriter.WriteLine(line)
 			Next
 		End If
@@ -2575,7 +2600,7 @@ Public Class SourceQcFile49
 			Next
 		End If
 
-		Me.WriteKeyValues(aSequenceDesc.theKeyValues, "keyvalues")
+		Me.WriteKeyValues(aSequenceDesc.theKeyValues, "keyvalues", False, 1)
 
 		Me.WriteSequenceLayerInfo(aSequenceDesc)
 
@@ -2584,7 +2609,7 @@ Public Class SourceQcFile49
 		If (aSequenceDesc.flags And SourceMdlAnimationDesc.STUDIO_CYCLEPOSE) > 0 Then
 			line = vbTab
 			line += "posecycle "
-			line += aSequenceDesc.cyclePoseIndex.ToString(TheApp.InternalNumberFormat)
+			line += Me.theMdlFileData.thePoseParamDescs(aSequenceDesc.cyclePoseIndex).theName
 			Me.theOutputFileStreamWriter.WriteLine(line)
 		End If
 
@@ -2594,9 +2619,23 @@ Public Class SourceQcFile49
 			Me.theOutputFileStreamWriter.WriteLine(line)
 		End If
 
+		If (aSequenceDesc.flags And SourceMdlAnimationDesc.STUDIO_ROOTXFORM) > 0 Then
+			line = vbTab
+			line += "rootdriver """
+			line += Me.theMdlFileData.theBones(aSequenceDesc.rootDriverBoneIndex).theName
+			line += """"
+			Me.theOutputFileStreamWriter.WriteLine(line)
+		End If
+
 		If (aSequenceDesc.flags And SourceMdlAnimationDesc.STUDIO_SNAP) > 0 Then
 			line = vbTab
 			line += "snap"
+			Me.theOutputFileStreamWriter.WriteLine(line)
+		End If
+
+		If (aSequenceDesc.flags And SourceMdlAnimationDesc.STUDIO_WORLD_AND_RELATIVE) > 0 Then
+			line = vbTab
+			line += "worldrelative"
 			Me.theOutputFileStreamWriter.WriteLine(line)
 		End If
 
@@ -2605,12 +2644,6 @@ Public Class SourceQcFile49
 			line += "worldspace"
 			Me.theOutputFileStreamWriter.WriteLine(line)
 		End If
-
-		'If blah Then
-		'	line = vbTab
-		'	line += ""
-		'	Me.theOutputFileStreamWriter.WriteLine(line)
-		'End If
 
 		Dim firstAnimDesc As SourceMdlAnimationDesc49
 		firstAnimDesc = Me.theMdlFileData.theAnimationDescs(aSequenceDesc.theAnimDescIndexes(0))
@@ -3688,7 +3721,7 @@ Public Class SourceQcFile49
 			'      For example, L4D2 van has several convex shapes, but only one solid and one bone.
 			'      Same for w_minigun. Both use $concave.
 			'If Me.theSourceEngineModel.thePhyFileHeader.solidCount = 1 Then
-			If Me.thePhyFileData.theSourcePhyIsCollisionModel Then
+			If Me.thePhyFileData.theSourcePhyCollisionDatas.Count = 1 Then
 				If TheApp.Settings.DecompileQcUseMixedCaseForKeywordsIsChecked Then
 					line = "$CollisionModel "
 				Else
@@ -3721,7 +3754,7 @@ Public Class SourceQcFile49
 	'$assumeworldspace
 	'$automass          // baked-in as mass
 	'$concave           // done
-	'$concaveperjoint
+	'$concaveperjoint   // done
 	'$damping           // done
 	'$drag
 	'$inertia           // done
@@ -3778,6 +3811,16 @@ Public Class SourceQcFile49
 			line += Me.thePhyFileData.theSourcePhyMaxConvexPieces.ToString()
 			Me.theOutputFileStreamWriter.WriteLine(line)
 		End If
+		If Me.thePhyFileData.theSourcePhyCollisionDatas.Count > 1 Then
+			For Each collisionData As SourcePhyCollisionData In Me.thePhyFileData.theSourcePhyCollisionDatas
+				If collisionData.theConvexMeshes.Count > 1 Then
+					line = vbTab
+					line += "$concaveperjoint"
+					Me.theOutputFileStreamWriter.WriteLine(line)
+					Exit For
+				End If
+			Next
+		End If
 
 		For i As Integer = 0 To Me.thePhyFileData.theSourcePhyPhysCollisionModels.Count - 1
 			Dim aSourcePhysCollisionModel As SourcePhyPhysCollisionModel
@@ -3828,6 +3871,19 @@ Public Class SourceQcFile49
 			If Me.thePhyFileData.theSourcePhyRagdollConstraintDescs.ContainsKey(aSourcePhysCollisionModel.theIndex) Then
 				Dim aConstraint As SourcePhyRagdollConstraint
 				aConstraint = Me.thePhyFileData.theSourcePhyRagdollConstraintDescs(aSourcePhysCollisionModel.theIndex)
+
+				'FROM: [44] SourceEngine2006_source\utils\studiomdl\collisionmodel.cpp
+				'FROM: [48] SourceEngine2007_source se2007_src [VS2017]\src_main\utils\studiomdl\collisionmodel.cpp
+				'FROM: [49] csgo_studiomdl\utils\studiomdl\collisionmodel.cpp
+				'	// In the editor/qc friction values are shown as 5X so 1.0 can be the default.
+				'	CJointConstraint *pConstraint = new CJointConstraint( pJointName, axis, jointType, limitMin, limitMax, friction * (1.0f/5.0f) );
+				Dim xFrictionValue As Double
+				xFrictionValue = aConstraint.theXFriction * 5
+				Dim yFrictionValue As Double
+				yFrictionValue = aConstraint.theYFriction * 5
+				Dim zFrictionValue As Double
+				zFrictionValue = aConstraint.theZFriction * 5
+
 				line = vbTab
 				line += "$jointconstrain """
 				line += aSourcePhysCollisionModel.theName
@@ -3836,7 +3892,7 @@ Public Class SourceQcFile49
 				line += " "
 				line += aConstraint.theXMax.ToString("0.######", TheApp.InternalNumberFormat)
 				line += " "
-				line += aConstraint.theXFriction.ToString("0.######", TheApp.InternalNumberFormat)
+				line += xFrictionValue.ToString("0.######", TheApp.InternalNumberFormat)
 				Me.theOutputFileStreamWriter.WriteLine(line)
 				line = vbTab
 				line += "$jointconstrain """
@@ -3846,7 +3902,7 @@ Public Class SourceQcFile49
 				line += " "
 				line += aConstraint.theYMax.ToString("0.######", TheApp.InternalNumberFormat)
 				line += " "
-				line += aConstraint.theYFriction.ToString("0.######", TheApp.InternalNumberFormat)
+				line += yFrictionValue.ToString("0.######", TheApp.InternalNumberFormat)
 				Me.theOutputFileStreamWriter.WriteLine(line)
 				line = vbTab
 				line += "$jointconstrain """
@@ -3856,7 +3912,7 @@ Public Class SourceQcFile49
 				line += " "
 				line += aConstraint.theZMax.ToString("0.######", TheApp.InternalNumberFormat)
 				line += " "
-				line += aConstraint.theZFriction.ToString("0.######", TheApp.InternalNumberFormat)
+				line += zFrictionValue.ToString("0.######", TheApp.InternalNumberFormat)
 				Me.theOutputFileStreamWriter.WriteLine(line)
 			End If
 		Next
@@ -4071,9 +4127,9 @@ Public Class SourceQcFile49
 					End If
 
 					If TheApp.Settings.DecompileQcUseMixedCaseForKeywordsIsChecked Then
-						line += "$LimitRotation "
+						line = "$LimitRotation "
 					Else
-						line += "$limitrotation "
+						line = "$limitrotation "
 					End If
 					line += """"
 					line += aBone.theName
@@ -4307,6 +4363,45 @@ Public Class SourceQcFile49
 					line += vbTab
 					line += "forward_friction "
 					line += aBone.theJiggleBone.baseForwardFriction.ToString("0.######", TheApp.InternalNumberFormat)
+					Me.theOutputFileStreamWriter.WriteLine(line)
+
+					line = vbTab
+					line += "}"
+					Me.theOutputFileStreamWriter.WriteLine(line)
+				End If
+				If (aBone.theJiggleBone.flags And SourceMdlJiggleBone.JIGGLE_IS_BOING) > 0 Then
+					line = vbTab
+					line += "is_boing"
+					Me.theOutputFileStreamWriter.WriteLine(line)
+					line = vbTab
+					line += "{"
+					Me.theOutputFileStreamWriter.WriteLine(line)
+
+					line = vbTab
+					line += vbTab
+					line += "impact_speed "
+					line += aBone.theJiggleBone.boingImpactSpeed.ToString("0.######", TheApp.InternalNumberFormat)
+					Me.theOutputFileStreamWriter.WriteLine(line)
+					line = vbTab
+					line += vbTab
+					line += "impact_angle "
+					' Reverse this: jiggleInfo->data.boingImpactAngle = cos( DEG2RAD( verify_atof( token ) ) );
+					line += MathModule.RadiansToDegrees(Math.Acos(aBone.theJiggleBone.boingImpactAngle)).ToString("0.######", TheApp.InternalNumberFormat)
+					Me.theOutputFileStreamWriter.WriteLine(line)
+					line = vbTab
+					line += vbTab
+					line += "damping_rate "
+					line += aBone.theJiggleBone.boingDampingRate.ToString("0.######", TheApp.InternalNumberFormat)
+					Me.theOutputFileStreamWriter.WriteLine(line)
+					line = vbTab
+					line += vbTab
+					line += "frequency "
+					line += aBone.theJiggleBone.boingFrequency.ToString("0.######", TheApp.InternalNumberFormat)
+					Me.theOutputFileStreamWriter.WriteLine(line)
+					line = vbTab
+					line += vbTab
+					line += "amplitude "
+					line += aBone.theJiggleBone.boingAmplitude.ToString("0.######", TheApp.InternalNumberFormat)
 					Me.theOutputFileStreamWriter.WriteLine(line)
 
 					line = vbTab
@@ -4714,6 +4809,64 @@ Public Class SourceQcFile49
 		End If
 	End Sub
 
+	Public Sub WriteBodyGroupPresetCommand()
+		If Me.theMdlFileData.theBodygroupPresets IsNot Nothing AndAlso Me.theMdlFileData.theBodygroupPresets.Count > 0 Then
+			Dim line As String = ""
+			Dim aBodyPart As SourceMdlBodyPart
+			Dim accumMask As Integer
+			Dim accumValue As Integer
+			Dim currentBodyModelValue As Integer
+			Dim bodyGroupPresetLines As List(Of String)
+
+			For Each aBodyGroupPreset As SourceMdlBodygroupPreset In Me.theMdlFileData.theBodygroupPresets
+				line = ""
+				Me.theOutputFileStreamWriter.WriteLine(line)
+
+				If TheApp.Settings.DecompileQcUseMixedCaseForKeywordsIsChecked Then
+					line = "$BodyGroupPreset"
+				Else
+					line = "$bodygrouppreset"
+				End If
+				line += " """
+				line += aBodyGroupPreset.theName
+				line += """"
+				Me.theOutputFileStreamWriter.WriteLine(line)
+
+				line = "{"
+				Me.theOutputFileStreamWriter.WriteLine(line)
+
+				accumMask = aBodyGroupPreset.mask
+				accumValue = aBodyGroupPreset.value
+				bodyGroupPresetLines = New List(Of String)()
+				For bodyPartIndex As Integer = Me.theMdlFileData.theBodyParts.Count - 1 To 0 Step -1
+					aBodyPart = Me.theMdlFileData.theBodyParts(bodyPartIndex)
+					currentBodyModelValue = 0
+					If aBodyPart.modelCount > 1 AndAlso accumMask >= aBodyPart.base Then
+						accumMask -= aBodyPart.base
+						While accumValue >= aBodyPart.base
+							currentBodyModelValue += 1
+							accumValue -= aBodyPart.base
+						End While
+
+						line = vbTab
+						line += """"
+						line += aBodyPart.theName
+						line += """ "
+						line += currentBodyModelValue.ToString(TheApp.InternalNumberFormat)
+						bodyGroupPresetLines.Add(line)
+					End If
+				Next
+				For bodyGroupPresetLineIndex As Integer = bodyGroupPresetLines.Count - 1 To 0 Step -1
+					line = bodyGroupPresetLines(bodyGroupPresetLineIndex)
+					Me.theOutputFileStreamWriter.WriteLine(line)
+				Next
+
+				line = "}"
+				Me.theOutputFileStreamWriter.WriteLine(line)
+			Next
+		End If
+	End Sub
+
 	Public Sub WriteControllerCommand()
 		Dim line As String = ""
 		Dim boneController As SourceMdlBoneController
@@ -4800,60 +4953,45 @@ Public Class SourceQcFile49
 		End Try
 	End Sub
 
-	Public Sub WriteKeyValues(ByVal keyValuesText As String, ByVal commandOrOptionText As String)
+	'$keyvalues
+	'{
+	'	"particles"
+	'	{
+	'		"effect"
+	'		{
+	'			name("sparks_head")
+	'			attachment_type("follow_attachment")
+	'			attachment_point("Head_sparks")
+	'		}
+	'		"effect"
+	'		{
+	'			name("sparks_head_wire1")
+	'			attachment_type("follow_attachment")
+	'			attachment_point("Head_Wire_1")
+	'		}
+	'	}
+	'}
+	Public Sub WriteKeyValues(ByVal keyValuesText As String, ByVal commandOrOptionText As String, Optional ByVal blankStartingLineIsWritten As Boolean = True, Optional ByVal indentCount As Integer = 0)
 		Dim line As String = ""
 		Dim startText As String = "mdlkeyvalue" + vbLf
 		Dim startText2 As String = """mdlkeyvalue"""
 		Dim text As String
+		Dim indentText As String
 
-		'$keyvalues
-		'{
-		'	"particles"
-		'	{
-		'		"effect"
-		'		{
-		'		name("sparks_head")
-		'		attachment_type("follow_attachment")
-		'		attachment_point("Head_sparks")
-		'		}
-		'		"effect"
-		'		{
-		'		name("sparks_head_wire1")
-		'		attachment_type("follow_attachment")
-		'		attachment_point("Head_Wire_1")
-		'		}
-		'		"effect"
-		'		{
-		'		name("sparks_knee_wire1")
-		'		attachment_type("follow_attachment")
-		'		attachment_point("R_Knee_Wire_1")
-		'		}
-		'		"effect"
-		'		{
-		'		name("sparks_knee_wire2")
-		'		attachment_type("follow_attachment")
-		'		attachment_point("R_Knee_Wire_2")
-		'		}
-		'		"effect"
-		'		{
-		'		name("sparks_ankle_wire1")
-		'		attachment_type("follow_attachment")
-		'		attachment_point("L_Ankle_Wire_1")
-		'		}
-		'		"effect"
-		'		{
-		'		name("sparks_ankle_wire2")
-		'		attachment_type("follow_attachment")
-		'		attachment_point("L_Ankle_Wire_2")
-		'		}			
-		'	}
-		'}
 		Try
 			If keyValuesText IsNot Nothing AndAlso keyValuesText.Length > 0 Then
-				line = ""
-				Me.theOutputFileStreamWriter.WriteLine(line)
+				If blankStartingLineIsWritten Then
+					line = ""
+					Me.theOutputFileStreamWriter.WriteLine(line)
+				End If
 
-				line = commandOrOptionText
+				indentText = ""
+				For j As Integer = 1 To indentCount
+					indentText += vbTab
+				Next
+
+				line = indentText
+				line += commandOrOptionText
 				Me.theOutputFileStreamWriter.WriteLine(line)
 
 				keyValuesText = keyValuesText.TrimStart()
@@ -4866,51 +5004,15 @@ Public Class SourceQcFile49
 				End If
 				text = text.TrimStart()
 
-				'lengthToRemove = 0
-				'While True
-				'	stopIndex = text.IndexOf(openBraceText)
-				'	If stopIndex > -1 Then
-				'		If stopIndex > 0 Then
-				'			line = text.Substring(0, stopIndex)
-				'			Me.theOutputFileStreamWriter.WriteLine(line)
-				'		End If
+				If text(0) <> "{" Then
+					text = "{" + text
+					text += "}" + vbLf
+				End If
 
-				'		line = "{"
-				'		lengthToRemove = stopIndex + openBraceText.Length
-				'	Else
-				'		stopIndex = text.IndexOf(closeBraceText)
-				'		If stopIndex > -1 Then
-				'			If stopIndex > 0 Then
-				'				line = text.Substring(0, stopIndex)
-				'				Me.theOutputFileStreamWriter.WriteLine(line)
-				'			End If
-
-				'			line = "}"
-				'			lengthToRemove = stopIndex + closeBraceText.Length
-				'		Else
-				'			stopIndex = text.IndexOf(linefeedCharText)
-				'			If stopIndex > -1 Then
-				'				line = text.Substring(0, stopIndex)
-				'				lengthToRemove = stopIndex + linefeedCharText.Length
-				'			Else
-				'				line = text
-				'			End If
-				'		End If
-				'	End If
-				'	Me.theOutputFileStreamWriter.WriteLine(line)
-
-				'	If stopIndex > -1 Then
-				'		text = text.Remove(0, lengthToRemove)
-				'		If text = "" Then
-				'			Exit While
-				'		End If
-				'	End If
-				'End While
-
-				Me.WriteTextLines(text, 0)
+				Me.WriteTextLines(text, indentCount)
 			End If
 		Catch ex As Exception
-
+			Dim debug As Integer = 4242
 		End Try
 	End Sub
 
@@ -4922,6 +5024,8 @@ Public Class SourceQcFile49
 		Dim lineQuoteCount As Integer
 		Dim lineWordCount As Integer
 		Dim beforeCloseBraceText As String
+		Dim untrimmedSectionName As String = ""
+		Dim sectionName As String = ""
 
 		indentText = ""
 		For j As Integer = 1 To indentCount
@@ -4935,12 +5039,31 @@ Public Class SourceQcFile49
 			textChar = text(i)
 			If textChar = "{" Then
 				If i > startIndex Then
-					line = indentText
-					line += text.Substring(startIndex, i - startIndex)
+					untrimmedSectionName = text.Substring(startIndex, i - startIndex)
+					sectionName = untrimmedSectionName.Trim()
+					'If key = "qc_path" Then
+					'	startIndex = i + 1
+					'	lineQuoteCount = 0
+					'	Continue For
+					'End If
+
+					If sectionName = "qc_path" Or sectionName = "animset_version 2 qc_path" Then
+						line = "// CSGO compiler adds the " + sectionName + " keyvalue section automatically."
+						Me.theOutputFileStreamWriter.WriteLine(line)
+						line = "//" + indentText
+					Else
+						sectionName = ""
+						line = indentText
+					End If
+					line += untrimmedSectionName
 					Me.theOutputFileStreamWriter.WriteLine(line)
 				End If
 
-				line = indentText
+				If sectionName <> "" Then
+					line = "//" + indentText
+				Else
+					line = indentText
+				End If
 				line += "{"
 				Me.theOutputFileStreamWriter.WriteLine(line)
 
@@ -4953,10 +5076,17 @@ Public Class SourceQcFile49
 				startIndex = i + 1
 				lineQuoteCount = 0
 			ElseIf textChar = "}" Then
+				'If key = "qc_path" Then
+				'	key = ""
+				'Else
 				If i > startIndex Then
 					beforeCloseBraceText = text.Substring(startIndex, i - startIndex).Trim()
 					If beforeCloseBraceText <> "" Then
-						line = indentText
+						If sectionName <> "" Then
+							line = "//" + indentText
+						Else
+							line = indentText
+						End If
 						line += beforeCloseBraceText
 						Me.theOutputFileStreamWriter.WriteLine(line)
 					End If
@@ -4968,28 +5098,42 @@ Public Class SourceQcFile49
 					indentText += vbTab
 				Next
 
-				line = indentText
+				If sectionName <> "" Then
+					line = "//" + indentText
+					sectionName = ""
+				Else
+					line = indentText
+				End If
 				line += "}"
 				Me.theOutputFileStreamWriter.WriteLine(line)
+				'End If
 
 				startIndex = i + 1
 				lineQuoteCount = 0
 			ElseIf textChar = """" Then
 				lineQuoteCount += 1
 				If lineQuoteCount = 2 Then
+					'If key <> "qc_path" Then
 					If i > startIndex Then
-						line = indentText
+						If sectionName <> "" Then
+							line = "//" + indentText
+						Else
+							line = indentText
+						End If
 						line += text.Substring(startIndex, i - startIndex + 1).Trim()
 						Me.theOutputFileStreamWriter.Write(line)
 					End If
+					'End If
 					startIndex = i + 1
 					'lineQuoteCount = 0
 				ElseIf lineQuoteCount = 4 Then
+					'If key <> "qc_path" Then
 					If i > startIndex Then
-						line = indentText
+						line = " "
 						line += text.Substring(startIndex, i - startIndex + 1).Trim()
 						Me.theOutputFileStreamWriter.WriteLine(line)
 					End If
+					'End If
 					startIndex = i + 1
 					lineQuoteCount = 0
 				End If

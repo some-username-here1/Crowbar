@@ -182,7 +182,7 @@ Public Class SourceSmdFile49
 		Me.theOutputFileStreamWriter.WriteLine(line)
 	End Sub
 
-	Public Sub WriteTrianglesSection(ByVal aVtxModel As SourceVtxModel07, ByVal lodIndex As Integer, ByVal aModel As SourceMdlModel, ByVal bodyPartVertexIndexStart As Integer)
+	Public Sub WriteTrianglesSection(ByVal aVtxModel As SourceVtxModel07, ByVal lodIndex As Integer, ByVal aModel As SourceMdlModel, ByVal bodyPartVertexIndexStart As Integer, ByVal extraUvChannelIndex As Integer)
 		Dim line As String = ""
 		Dim materialLine As String = ""
 		Dim vertex1Line As String = ""
@@ -239,9 +239,9 @@ Public Class SourceSmdFile49
 									'------
 									'NOTE: studiomdl.exe will complain if texture name for eyeball is not at start of line.
 									materialLine = materialFileName
-									vertex1Line = Me.WriteVertexLine(aStripGroup, vtxIndexIndex, lodIndex, meshVertexIndexStart, bodyPartVertexIndexStart)
-									vertex2Line = Me.WriteVertexLine(aStripGroup, vtxIndexIndex + 2, lodIndex, meshVertexIndexStart, bodyPartVertexIndexStart)
-									vertex3Line = Me.WriteVertexLine(aStripGroup, vtxIndexIndex + 1, lodIndex, meshVertexIndexStart, bodyPartVertexIndexStart)
+									vertex1Line = Me.WriteVertexLine(aStripGroup, vtxIndexIndex, lodIndex, meshVertexIndexStart, bodyPartVertexIndexStart, extraUvChannelIndex)
+									vertex2Line = Me.WriteVertexLine(aStripGroup, vtxIndexIndex + 2, lodIndex, meshVertexIndexStart, bodyPartVertexIndexStart, extraUvChannelIndex)
+									vertex3Line = Me.WriteVertexLine(aStripGroup, vtxIndexIndex + 1, lodIndex, meshVertexIndexStart, bodyPartVertexIndexStart, extraUvChannelIndex)
 									If vertex1Line.StartsWith("// ") OrElse vertex2Line.StartsWith("// ") OrElse vertex3Line.StartsWith("// ") Then
 										materialLine = "// " + materialLine
 										If Not vertex1Line.StartsWith("// ") Then
@@ -283,7 +283,7 @@ Public Class SourceSmdFile49
 		Dim aBone As SourceMdlBone
 		Dim boneIndex As Integer
 		Dim aTriangle As SourcePhyFace
-		Dim faceSection As SourcePhyFaceSection
+		Dim convexMesh As SourcePhyConvexMesh
 		Dim phyVertex As SourcePhyVertex
 		Dim aVectorTransformed As SourceVector
 		Dim aSourcePhysCollisionModel As SourcePhyPhysCollisionModel
@@ -301,21 +301,37 @@ Public Class SourceSmdFile49
 						aSourcePhysCollisionModel = Nothing
 					End If
 
-					For faceSectionIndex As Integer = 0 To collisionData.theFaceSections.Count - 1
-						faceSection = collisionData.theFaceSections(faceSectionIndex)
+					For convexMeshIndex As Integer = 0 To collisionData.theConvexMeshes.Count - 1
+						convexMesh = collisionData.theConvexMeshes(convexMeshIndex)
 
-						If faceSection.theBoneIndex >= Me.theMdlFileData.theBones.Count Then
+						' [12-Apr-2022] From RED_EYE. (He is using someone else's set of data strutures for PHY file.)
+						'     flags: has_children: (self.flags >> 0) & 3  ' 0 = false; > 0 true
+						'     This seems to be correct way rather than checking Me.thePhyFileData.theSourcePhyIsCollisionModel.
+						'     Example where checking Me.thePhyFileData.theSourcePhyIsCollisionModel is incorrect (because the gib meshes are compiled in): 
+						'         "SourceFilmmaker\game\hl2\models\combine_strider.mdl"
+						If (convexMesh.flags And 3) > 0 Then
 							Continue For
 						End If
-						If aSourcePhysCollisionModel IsNot Nothing AndAlso Me.theMdlFileData.theBoneNameToBoneIndexMap.ContainsKey(aSourcePhysCollisionModel.theName) Then
-							boneIndex = Me.theMdlFileData.theBoneNameToBoneIndexMap(aSourcePhysCollisionModel.theName)
+
+						If Me.theMdlFileData.theBones.Count = 1 Then
+							boneIndex = 0
 						Else
-							boneIndex = faceSection.theBoneIndex
+							boneIndex = convexMesh.theBoneIndex
+							' MDL36 and MDL37 need this because their PHY does not store bone index.
+							' Model versions above MDL37 can have multiple bones with same name, so this check needs to be last.
+							If boneIndex < 0 Then
+								If aSourcePhysCollisionModel IsNot Nothing AndAlso Me.theMdlFileData.theBoneNameToBoneIndexMap.ContainsKey(aSourcePhysCollisionModel.theName) Then
+									boneIndex = Me.theMdlFileData.theBoneNameToBoneIndexMap(aSourcePhysCollisionModel.theName)
+								Else
+									' Not expected to reach here, but just in case, write a mesh connected to first bone instead of writing an empty mesh.
+									boneIndex = 0
+								End If
+							End If
 						End If
 						aBone = Me.theMdlFileData.theBones(boneIndex)
 
-						For triangleIndex As Integer = 0 To faceSection.theFaces.Count - 1
-							aTriangle = faceSection.theFaces(triangleIndex)
+						For triangleIndex As Integer = 0 To convexMesh.theFaces.Count - 1
+							aTriangle = convexMesh.theFaces(triangleIndex)
 
 							line = "  phy"
 							Me.theOutputFileStreamWriter.WriteLine(line)
@@ -325,9 +341,13 @@ Public Class SourceSmdFile49
 							'  19 -0.008333 0.997005 1.003710 0.0 0.0 0.0 1 0
 							For vertexIndex As Integer = 0 To aTriangle.vertexIndex.Length - 1
 								'phyVertex = collisionData.theVertices(aTriangle.vertexIndex(vertexIndex))
-								phyVertex = faceSection.theVertices(aTriangle.vertexIndex(vertexIndex))
+								phyVertex = convexMesh.theVertices(aTriangle.vertexIndex(vertexIndex))
 
 								aVectorTransformed = Me.TransformPhyVertex(aBone, phyVertex.vertex, aSourcePhysCollisionModel)
+
+								''DEBUG: Move different face sections away from each other.
+								'aVectorTransformed.x += faceSectionIndex * 20
+								'aVectorTransformed.y += faceSectionIndex * 20
 
 								line = "    "
 								line += boneIndex.ToString(TheApp.InternalNumberFormat)
@@ -1563,7 +1583,7 @@ Public Class SourceSmdFile49
 		'End If
 	End Sub
 
-	Private Function WriteVertexLine(ByVal aStripGroup As SourceVtxStripGroup07, ByVal aVtxIndexIndex As Integer, ByVal lodIndex As Integer, ByVal meshVertexIndexStart As Integer, ByVal bodyPartVertexIndexStart As Integer) As String
+	Private Function WriteVertexLine(ByVal aStripGroup As SourceVtxStripGroup07, ByVal aVtxIndexIndex As Integer, ByVal lodIndex As Integer, ByVal meshVertexIndexStart As Integer, ByVal bodyPartVertexIndexStart As Integer, ByVal extraUvChannelIndex As Integer) As String
 		Dim aVtxVertexIndex As UShort
 		Dim aVtxVertex As SourceVtxVertex07
 		Dim aVertex As SourceVertex
@@ -1616,10 +1636,19 @@ Public Class SourceSmdFile49
 			line += " "
 			line += aVertex.normalZ.ToString("0.000000", TheApp.InternalNumberFormat)
 
-			line += " "
-			line += aVertex.texCoordX.ToString("0.000000", TheApp.InternalNumberFormat)
-			line += " "
-			line += (1 - aVertex.texCoordY).ToString("0.000000", TheApp.InternalNumberFormat)
+			If extraUvChannelIndex = -1 Then
+				line += " "
+				line += aVertex.texCoordX.ToString("0.000000", TheApp.InternalNumberFormat)
+				line += " "
+				line += (1 - aVertex.texCoordY).ToString("0.000000", TheApp.InternalNumberFormat)
+			Else
+				Dim u As Double = Me.theVvdFileData.theExtraDatas(extraUvChannelIndex).theTextureCoordinates(vertexIndex).X
+				Dim v As Double = Me.theVvdFileData.theExtraDatas(extraUvChannelIndex).theTextureCoordinates(vertexIndex).Y
+				line += " "
+				line += u.ToString("0.000000", TheApp.InternalNumberFormat)
+				line += " "
+				line += (1 - v).ToString("0.000000", TheApp.InternalNumberFormat)
+			End If
 
 			line += " "
 			line += aVertex.boneWeight.boneCount.ToString(TheApp.InternalNumberFormat)
@@ -1687,7 +1716,7 @@ Public Class SourceSmdFile49
 	End Sub
 
 	Private Sub ProcessTransformsForPhysics()
-		If Me.thePhyFileData.theSourcePhyIsCollisionModel Then
+		If Me.thePhyFileData.theSourcePhyCollisionDatas.Count = 1 Then
 			Dim aFirstAnimationDescFrameLine As New AnimationFrameLine()
 			Me.CalculateFirstAnimDescFrameLinesForPhysics(aFirstAnimationDescFrameLine)
 
@@ -1808,7 +1837,7 @@ Public Class SourceSmdFile49
 		'TODO: [TransformPhyVertex] Merge the various code blocks (separated by MDL version) into one code block.
 		If Me.theMdlFileData.version >= 44 AndAlso Me.theMdlFileData.version <= 47 Then
 			' This works for various weapons and vehicles in HL2.
-			If Me.thePhyFileData.theSourcePhyIsCollisionModel Then
+			If Me.thePhyFileData.theSourcePhyCollisionDatas.Count = 1 Then
 				aVectorTransformed.x = 1 / 0.0254 * vertex.z
 				aVectorTransformed.y = 1 / 0.0254 * -vertex.x
 				aVectorTransformed.z = 1 / 0.0254 * -vertex.y
@@ -1819,7 +1848,7 @@ Public Class SourceSmdFile49
 				aVectorTransformed = MathModule.VectorITransform(aVector, aBone.poseToBoneColumn0, aBone.poseToBoneColumn1, aBone.poseToBoneColumn2, aBone.poseToBoneColumn3)
 			End If
 		Else
-			If Me.thePhyFileData.theSourcePhyIsCollisionModel Then
+			If Me.thePhyFileData.theSourcePhyCollisionDatas.Count = 1 Then
 				'Dim copyOfVector As New SourceVector()
 				''copyOfVector.x = 1 / 0.0254 * vertex.x
 				''copyOfVector.y = 1 / 0.0254 * vertex.y
@@ -3098,7 +3127,7 @@ Public Class SourceSmdFile49
 				'NOTE: Needs to be offset from current animValues index to match the C++ code above in comment.
 				v1 = animValues(animValueIndex + animValues(animValueIndex).valid).value * scale
 			End If
-		Catch
+		Catch ex As Exception
 		End Try
 
 		Return v1

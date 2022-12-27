@@ -778,7 +778,7 @@ Public Class SourceQcFile2531
 		If Me.thePhyFileData IsNot Nothing AndAlso Me.thePhyFileData.solidCount > 0 Then
 			Me.theOutputFileStreamWriter.WriteLine(line)
 
-			If Me.thePhyFileData.theSourcePhyIsCollisionModel Then
+			If Me.thePhyFileData.theSourcePhyCollisionDatas.Count = 1 Then
 				If TheApp.Settings.DecompileQcUseMixedCaseForKeywordsIsChecked Then
 					line = "$CollisionModel "
 				Else
@@ -840,6 +840,16 @@ Public Class SourceQcFile2531
 			line += "$maxconvexpieces "
 			line += Me.thePhyFileData.theSourcePhyMaxConvexPieces.ToString()
 			Me.theOutputFileStreamWriter.WriteLine(line)
+		End If
+		If Me.thePhyFileData.theSourcePhyCollisionDatas.Count > 1 Then
+			For Each collisionData As SourcePhyCollisionData In Me.thePhyFileData.theSourcePhyCollisionDatas
+				If collisionData.theConvexMeshes.Count > 1 Then
+					line = vbTab
+					line += "$concaveperjoint"
+					Me.theOutputFileStreamWriter.WriteLine(line)
+					Exit For
+				End If
+			Next
 		End If
 
 		For i As Integer = 0 To Me.thePhyFileData.theSourcePhyPhysCollisionModels.Count - 1
